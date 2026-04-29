@@ -1,30 +1,18 @@
-/**
- * EmbeddingAdapter Interface
- *
- * MLP needs vector embeddings to do semantic similarity search.
- * It does not care who generates them.
- *
- * Implement this to use: Anthropic, OpenAI, Cohere, a local model, anything.
- */
+interface EmbeddingAdapter {
 
-export interface EmbeddingAdapter {
+  // Generate a vector embedding for a piece of text
+  // Returns a flat number array
+  // Dimension must be consistent across all calls
+  embed(text: string): Promise<number[]>
 
-  /**
-   * Generate an embedding vector for a piece of text.
-   * The dimension of the returned array must be consistent
-   * with what was used when clusters were stored.
-   */
-  embed(text: string): Promise<number[]>;
+  // The vector dimension this adapter produces
+  // Must match the dimension used when clusters were stored
+  // Anthropic voyage-3 = 1024
+  readonly dimension: number
 
-  /**
-   * The dimension of vectors this adapter produces.
-   * Used for validation and storage configuration.
-   */
-  dimension: number;
+  // Human readable model name — stored with clusters for auditability
+  readonly modelName: string
 
-  /**
-   * Human-readable name of the model/provider.
-   * Stored alongside clusters for auditability.
-   */
-  modelName: string;
 }
+
+export type { EmbeddingAdapter }
