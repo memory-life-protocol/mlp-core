@@ -1,7 +1,18 @@
 export type ClusterConfidence = 'provisional' | 'verified' | 'superseded'
 
+export type SourceType =
+  'founder' |
+  'conversation' |
+  'document' |
+  'code' |
+  'decision' |
+  'experiment' |
+  'test' |
+  'slack' |
+  'github'
+
 export interface ClusterEvidence {
-  source_type: 'founder' | 'code' | 'test' | 'conversation' | 'document' | 'slack' | 'github'
+  source_type: SourceType
   source_tool: 'claude' | 'slack' | 'github' | 'notion' | 'manual' | 'cursor' | 'vscode'
   corroborated_at: string
   detail: string
@@ -23,7 +34,7 @@ export interface ClusterTemporal {
 }
 
 export interface ClusterSource {
-  type: 'conversation' | 'document' | 'code' | 'decision' | 'experiment'
+  type: SourceType
   tool: 'claude' | 'slack' | 'github' | 'notion' | 'manual' | 'cursor' | 'vscode'
   encoded_by: string
 }
@@ -70,7 +81,7 @@ export interface Cluster {
 
 export interface Signal {
   raw: string
-  source_type: ClusterSource['type']
+  source_type: SourceType
   source_tool: ClusterSource['tool']
   workspace: string
   encoded_by: string
