@@ -10,9 +10,9 @@
     "start": "node dist/src/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "falkordb": "^4.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^16.0.0",
+    "falkordb": "^4.0.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
