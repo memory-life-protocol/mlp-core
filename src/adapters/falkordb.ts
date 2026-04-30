@@ -32,7 +32,7 @@
  *         × cluster.weight_combined
  */
 
-import { FalkorDB, Graph } from 'falkordb'
+import { createClient, Graph } from 'falkordb'
 import type { StorageAdapter } from '../interfaces/StorageAdapter.js'
 import type {
   Cluster,
@@ -54,7 +54,7 @@ interface FalkorDBConfig {
 
 export class FalkorDBAdapter implements StorageAdapter {
 
-  private client: FalkorDB | null = null
+  private client: ReturnType<typeof createClient> | null = null
   private graph: Graph | null = null
   private config: FalkorDBConfig
 
@@ -65,21 +65,22 @@ export class FalkorDBAdapter implements StorageAdapter {
   // ── Lifecycle ───────────────────────────────────────────────────────
 
   async connect(): Promise<void> {
-    this.client = await FalkorDB.connect({
+    this.client = createClient({
       socket: {
         host: this.config.host,
         port: this.config.port
       }
     })
+    await this.client.connect()
 
-    this.graph = this.client.selectGraph('mlp')
+    this.graph = new Graph(this.client as any, 'mlp')
     await this.ensureSchema()
     console.error('[FalkorDBAdapter] Connected')
   }
 
   async disconnect(): Promise<void> {
     if (this.client) {
-      await this.client.close()
+      await this.client.disconnect()
       this.client = null
       this.graph = null
       console.error('[FalkorDBAdapter] Disconnected')
