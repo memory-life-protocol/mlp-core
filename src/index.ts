@@ -33,6 +33,7 @@
  */
 
 import 'dotenv/config'
+import { createServer } from 'node:http'
 import { Encoder } from './engine/encoder.js'
 import { Activator } from './engine/activator.js'
 import { Surfacer } from './engine/surfacer.js'
@@ -101,6 +102,26 @@ async function startWatchers(
   }
 }
 
+function startHealthCheck(port: number): void {
+  const server = createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        status: 'ok',
+        version: '0.1.0',
+        env: process.env.MLP_ENV ?? 'development',
+        timestamp: new Date().toISOString()
+      }))
+    } else {
+      res.writeHead(404)
+      res.end()
+    }
+  })
+  server.listen(port, () => {
+    console.error(`[MLP] Health check listening on port ${port}`)
+  })
+}
+
 async function main(): Promise<void> {
   console.error(`[MLP] Starting Memory Life Protocol...`)
   console.error(`[MLP] Environment: ${IS_PRODUCTION ? 'production' : 'development'}`)
@@ -120,6 +141,9 @@ async function main(): Promise<void> {
 
   // Start background consolidation
   consolidator.start()
+
+  // Start health check for Railway
+  startHealthCheck(parseInt(process.env.PORT ?? '3000'))
 
   // Start watchers — empty by default
   // Connector packages register watchers here
