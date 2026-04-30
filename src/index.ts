@@ -54,14 +54,15 @@ async function buildAdapters(): Promise<{
   extractor: ExtractionAdapter
 }> {
   if (IS_PRODUCTION) {
-    // Production adapters — loaded dynamically so dev has no hard dependency
-    // on falkordb or @anthropic-ai/sdk
-    // @ts-ignore — production adapters not yet built
-    const { FalkorDBAdapter } = await import('./adapters/falkordb.js')
-    // @ts-ignore — production adapters not yet built
-    const { AnthropicEmbeddingAdapter } = await import('./adapters/anthropic-embedder.js')
-    // @ts-ignore — production adapters not yet built
-    const { AnthropicExtractionAdapter } = await import('./adapters/anthropic-extractor.js')
+    // Production connectors — paths as variables prevent TypeScript from
+    // following these imports at compile time. Connectors live outside rootDir.
+    const falkordbPath = '../connectors/falkordb/adapter.js'
+    const anthropicEmbedderPath = '../connectors/anthropic/embedder.js'
+    const anthropicExtractorPath = '../connectors/anthropic/extractor.js'
+
+    const { FalkorDBAdapter } = await import(falkordbPath)
+    const { AnthropicEmbeddingAdapter } = await import(anthropicEmbedderPath)
+    const { AnthropicExtractionAdapter } = await import(anthropicExtractorPath)
 
     const storage = new FalkorDBAdapter({
       host: process.env.FALKORDB_HOST ?? 'localhost',
