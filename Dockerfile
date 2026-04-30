@@ -50,4 +50,4 @@ ENV MLP_ENV=production
 ENV NODE_ENV=production
 
 # Run the compiled server
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/src/index.js"]

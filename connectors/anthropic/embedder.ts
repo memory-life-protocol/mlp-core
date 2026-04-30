@@ -27,7 +27,7 @@
  *   Nothing else in the protocol changes.
  */
 
-import type { EmbeddingAdapter } from '../interfaces/EmbeddingAdapter.js'
+import type { EmbeddingAdapter } from '../../src/interfaces/EmbeddingAdapter.js'
 
 interface AnthropicEmbeddingConfig {
   apiKey: string

@@ -26,7 +26,7 @@
 import type {
   ExtractionAdapter,
   ExtractionResult
-} from '../interfaces/ExtractionAdapter.js'
+} from '../../src/interfaces/ExtractionAdapter.js'
 
 const EXTRACTION_PROMPT = `You are an encoding engine for a memory protocol.
 Extract the following from the input exactly as present.

@@ -33,7 +33,7 @@
  */
 
 import { createClient, Graph } from 'falkordb'
-import type { StorageAdapter } from '../interfaces/StorageAdapter.js'
+import type { StorageAdapter } from '../../src/interfaces/StorageAdapter.js'
 import type {
   Cluster,
   Trigger,
@@ -45,7 +45,7 @@ import type {
   Workspace,
   WatcherSignal,
   ClusterConnection
-} from '../interfaces/types.js'
+} from '../../src/interfaces/types.js'
 
 interface FalkorDBConfig {
   host: string
