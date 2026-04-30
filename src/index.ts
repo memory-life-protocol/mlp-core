@@ -38,7 +38,8 @@ import { Encoder } from './engine/encoder.js'
 import { Activator } from './engine/activator.js'
 import { Surfacer } from './engine/surfacer.js'
 import { Consolidator } from './engine/consolidator.js'
-import { startMLPServer } from './mcp/server.js'
+import { startMLPServer, createMLPServer } from './mcp/server.js'
+import { startHTTPTransport } from './mcp/http-transport.js'
 import { InMemoryAdapter } from './adapters/memory.js'
 import { StubEmbeddingAdapter } from './adapters/stub-embedder.js'
 import { StubExtractionAdapter } from './adapters/stub-extractor.js'
@@ -122,6 +123,42 @@ function startHealthCheck(port: number): void {
   })
 }
 
+async function startTransports(
+  encoder: Encoder,
+  activator: Activator,
+  surfacer: Surfacer,
+  consolidator: Consolidator,
+  storage: StorageAdapter
+): Promise<void> {
+  const transport = process.env.MLP_TRANSPORT ?? 'stdio'
+  const port = parseInt(process.env.PORT ?? '8080')
+
+  if (transport === 'http') {
+    // HTTP/SSE transport — for web and remote connections
+    startHTTPTransport({
+      port,
+      storage,
+      version: '0.1.0',
+      createServer: (_workspaceId: string) => {
+        return createMLPServer(
+          encoder,
+          activator,
+          surfacer,
+          consolidator,
+          storage
+        )
+      }
+    })
+
+    console.error(`[MLP] HTTP transport active on port ${port}`)
+
+  } else {
+    // stdio transport — for local Claude Code and Cursor
+    await startMLPServer(encoder, activator, surfacer, consolidator, storage)
+    startHealthCheck(parseInt(process.env.HEALTH_PORT ?? '3000'))
+  }
+}
+
 async function main(): Promise<void> {
   console.error(`[MLP] Starting Memory Life Protocol...`)
   console.error(`[MLP] Environment: ${IS_PRODUCTION ? 'production' : 'development'}`)
@@ -142,16 +179,13 @@ async function main(): Promise<void> {
   // Start background consolidation
   consolidator.start()
 
-  // Start health check for Railway
-  startHealthCheck(parseInt(process.env.PORT ?? '3000'))
-
   // Start watchers — empty by default
   // Connector packages register watchers here
   const watchers: WatcherAdapter[] = []
   await startWatchers(watchers, encoder)
 
-  // Start MCP server
-  await startMLPServer(encoder, activator, surfacer, consolidator, storage)
+  // Start transports
+  await startTransports(encoder, activator, surfacer, consolidator, storage)
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
