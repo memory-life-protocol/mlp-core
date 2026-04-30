@@ -24,6 +24,7 @@ RUN npm ci
 # Copy source
 COPY tsconfig.json ./
 COPY src/ ./src/
+COPY connectors/ ./connectors/
 
 # Compile TypeScript
 RUN npm run build
