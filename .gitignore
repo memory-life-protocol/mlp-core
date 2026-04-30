@@ -141,3 +141,15 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Workspace credentials — never commit
+.env.local
+.env.production
+.env.*.local
+scripts/.env
+*.credentials
+*.secrets
+
+# Script output
+workspace-credentials.txt
+api-keys.txt
