@@ -139,6 +139,9 @@ async function startTransports(
     startHTTPTransport({
       port,
       storage,
+      encoder,
+      activator,
+      surfacer,
       version: '0.1.0',
       createMLPServer: (_workspaceId: string) => {
         return createMLPServer(
