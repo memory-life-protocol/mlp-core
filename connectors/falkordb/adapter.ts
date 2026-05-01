@@ -53,6 +53,52 @@ interface FalkorDBConfig {
   password?: string
 }
 
+// Explicit field list for RETURN — excludes embedding (float32 vector,
+// not deserialisable by the FalkorDB JS driver) and returns flat scalars.
+const CLUSTER_FIELDS_C = `
+  c.id AS id,
+  c.created_at AS created_at,
+  c.updated_at AS updated_at,
+  c.what AS what,
+  c.why AS why,
+  c.confidence AS confidence,
+  c.constraint_type AS constraint_type,
+  c.workspace AS workspace,
+  c.module AS module,
+  c.workflow AS workflow,
+  c.tags AS tags,
+  c.source_type AS source_type,
+  c.source_tool AS source_tool,
+  c.encoded_by AS encoded_by,
+  c.valid_from AS valid_from,
+  c.weight_structural AS weight_structural,
+  c.weight_usage AS weight_usage,
+  c.weight_combined AS weight_combined,
+  c.evidence AS evidence,
+  c.history AS history`
+
+const CLUSTER_FIELDS_NODE = `
+  node.id AS id,
+  node.created_at AS created_at,
+  node.updated_at AS updated_at,
+  node.what AS what,
+  node.why AS why,
+  node.confidence AS confidence,
+  node.constraint_type AS constraint_type,
+  node.workspace AS workspace,
+  node.module AS module,
+  node.workflow AS workflow,
+  node.tags AS tags,
+  node.source_type AS source_type,
+  node.source_tool AS source_tool,
+  node.encoded_by AS encoded_by,
+  node.valid_from AS valid_from,
+  node.weight_structural AS weight_structural,
+  node.weight_usage AS weight_usage,
+  node.weight_combined AS weight_combined,
+  node.evidence AS evidence,
+  node.history AS history`
+
 export class FalkorDBAdapter implements StorageAdapter {
 
   private client: ReturnType<typeof createClient> | null = null
@@ -251,13 +297,16 @@ export class FalkorDBAdapter implements StorageAdapter {
     depth: number
   ): Promise<ActivationResult> {
 
-    // Find seed via vector similarity scoped to workspace
+    // Find seed via vector similarity scoped to workspace.
+    // Returns flat scalar fields — embedding excluded (float32 not deserialisable).
     const seedResult = await this.graph!.query(
       `CALL db.idx.vector.queryNodes('Cluster', 'embedding', 5, vecf32($embedding))
        YIELD node, score
        WHERE node.workspace = $workspace
        AND node.confidence <> 'superseded'
-       RETURN node, score
+       RETURN
+         ${CLUSTER_FIELDS_NODE},
+         score
        ORDER BY score DESC
        LIMIT 1`,
       {
@@ -278,7 +327,7 @@ export class FalkorDBAdapter implements StorageAdapter {
     }
 
     const seedRow = seedResult.data[0] as any
-    const seed = this.rowToCluster(seedRow.node)
+    const seed = this.rowToCluster(seedRow)
     const seedSimilarity = parseFloat(String(seedRow.score)) || 0
 
     // Boost if in session context
@@ -287,7 +336,8 @@ export class FalkorDBAdapter implements StorageAdapter {
       ? Math.min(seedSimilarity * 1.2, 1.0)
       : seedSimilarity
 
-    // Spread activation via graph traversal
+    // Spread activation via graph traversal.
+    // Returns flat scalar fields — embedding excluded.
     const spreadResult = await this.graph!.query(
       `MATCH path = (seed:Cluster {id: $seedId})-[r:CONNECTS*1..${depth}]->(c:Cluster)
        WHERE c.workspace = $workspace
@@ -298,7 +348,10 @@ export class FalkorDBAdapter implements StorageAdapter {
            rel IN relationships(path) | s * rel.strength
          ) AS path_strength,
          length(path) AS degree
-       RETURN c, path_strength, degree
+       RETURN
+         ${CLUSTER_FIELDS_C},
+         path_strength,
+         degree
        ORDER BY path_strength DESC
        LIMIT 50`,
       {
@@ -312,7 +365,7 @@ export class FalkorDBAdapter implements StorageAdapter {
     const activated: ActivatedEntry[] = []
 
     for (const row of (spreadResult.data ?? []) as any[]) {
-      const cluster = this.rowToCluster(row.c)
+      const cluster = this.rowToCluster(row)
       const degree = parseInt(String(row.degree)) || 1
       const pathStrength = parseFloat(String(row.path_strength ?? 1)) || 1
 
@@ -423,7 +476,7 @@ export class FalkorDBAdapter implements StorageAdapter {
 
     const originResult = await this.graph!.query(
       `MATCH (c:Cluster {id: $id, workspace: $workspace})
-       RETURN c`,
+       RETURN ${CLUSTER_FIELDS_C}`,
       { params: { id: clusterId, workspace } }
     )
 
@@ -431,7 +484,7 @@ export class FalkorDBAdapter implements StorageAdapter {
       return { origin: null as any, paths: [] }
     }
 
-    const origin = this.rowToCluster((originResult.data[0] as any).c)
+    const origin = this.rowToCluster(originResult.data[0] as any)
 
     const pathResult = await this.graph!.query(
       `MATCH path = (origin:Cluster {id: $id})-[r:CONNECTS*1..${degrees}]->(c:Cluster)
@@ -444,17 +497,21 @@ export class FalkorDBAdapter implements StorageAdapter {
            s = 1.0,
            rel IN relationships(path) | s * rel.strength
          ) AS path_strength
-       RETURN c, pathIds, degree, path_strength
+       RETURN
+         ${CLUSTER_FIELDS_C},
+         pathIds,
+         degree,
+         path_strength
        ORDER BY path_strength DESC`,
       { params: { id: clusterId, workspace } }
     )
 
     const paths: TraversePath[] = (pathResult.data ?? []).map(
       (row: any) => ({
-        cluster: this.rowToCluster(row.c),
+        cluster: this.rowToCluster(row),
         path: row.pathIds as string[],
-        degree: row.degree as number,
-        path_strength: row.path_strength as number
+        degree: parseInt(String(row.degree)) || 1,
+        path_strength: parseFloat(String(row.path_strength ?? 1)) || 1
       })
     )
 
@@ -571,13 +628,13 @@ export class FalkorDBAdapter implements StorageAdapter {
   ): Promise<Cluster | null> {
     const result = await this.graph!.query(
       `MATCH (c:Cluster {id: $id, workspace: $workspace})
-       RETURN c`,
+       RETURN ${CLUSTER_FIELDS_C}`,
       { params: { id: clusterId, workspace } }
     )
 
     const row = result.data?.[0] as any
     if (!row) return null
-    return this.rowToCluster(row.c)
+    return this.rowToCluster(row)
   }
 
   async getClusterHistory(
@@ -619,14 +676,14 @@ export class FalkorDBAdapter implements StorageAdapter {
     const result = await this.graph!.query(
       `MATCH (c:Cluster {workspace: $workspace})
        WHERE c.confidence <> 'superseded'
-       RETURN c
+       RETURN ${CLUSTER_FIELDS_C}
        ORDER BY c.weight_combined DESC
        LIMIT $topK`,
       { params: { workspace, topK } }
     )
 
     return (result.data ?? []).map(
-      (row: any) => this.rowToCluster(row.c)
+      (row: any) => this.rowToCluster(row)
     )
   }
 
@@ -639,14 +696,14 @@ export class FalkorDBAdapter implements StorageAdapter {
       `MATCH (c:Cluster {workspace: $workspace})
        WHERE c.confidence <> 'superseded'
        AND c.valid_from >= $since
-       RETURN c
+       RETURN ${CLUSTER_FIELDS_C}
        ORDER BY c.valid_from DESC
        LIMIT $topK`,
       { params: { workspace, since, topK } }
     )
 
     return (result.data ?? []).map(
-      (row: any) => this.rowToCluster(row.c)
+      (row: any) => this.rowToCluster(row)
     )
   }
 
@@ -773,6 +830,8 @@ export class FalkorDBAdapter implements StorageAdapter {
     )
   }
 
+  // rowToCluster expects a flat row of scalar fields — no node wrapper.
+  // All RETURN clauses must use explicit field aliases, never RETURN c or RETURN node.
   private rowToCluster(row: any): Cluster {
     return {
       id: row.id as string,
