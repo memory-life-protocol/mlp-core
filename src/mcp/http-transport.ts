@@ -114,9 +114,14 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       // Connect server to transport
       await server.connect(transport)
 
-      // StreamableHTTPServerTransport requires both content types in Accept.
-      // Normalize here so clients that omit one still work.
-      req.headers['accept'] = 'application/json, text/event-stream'
+      // Force correct Accept header before MCP SDK validates it
+      // This allows any HTTP client to connect without
+      // needing to set specific Accept headers
+      const originalHeaders = req.headers
+      req.headers = {
+        ...originalHeaders,
+        'accept': 'application/json, text/event-stream'
+      }
 
       // Handle the request
       await transport.handleRequest(req, res)
