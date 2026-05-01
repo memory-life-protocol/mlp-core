@@ -1,9 +1,9 @@
 /**
  * AnthropicEmbeddingAdapter
  *
- * Implements EmbeddingAdapter using the Anthropic Voyage API.
- * Uses voyage-3 — Anthropic's best embedding model.
- * Dimension: 1024.
+ * Implements EmbeddingAdapter using the Voyage AI API.
+ * Uses voyage-3 — 1024-dimensional embeddings.
+ * API key from voyageai.com, stored in VOYAGE_API_KEY.
  *
  * What it does:
  *   - Makes one API call per embed operation
@@ -44,7 +44,7 @@ export class AnthropicEmbeddingAdapter implements EmbeddingAdapter {
   constructor(config: AnthropicEmbeddingConfig) {
     if (!config.apiKey) {
       throw new Error(
-        'AnthropicEmbeddingAdapter requires ANTHROPIC_API_KEY'
+        'AnthropicEmbeddingAdapter requires VOYAGE_API_KEY'
       )
     }
     this.apiKey = config.apiKey
@@ -56,34 +56,33 @@ export class AnthropicEmbeddingAdapter implements EmbeddingAdapter {
       throw new Error('Cannot embed empty text')
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/embeddings', {
+    const response = await fetch('https://api.voyageai.com/v1/embeddings', {
       method: 'POST',
       headers: {
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
+        'Authorization': `Bearer ${this.apiKey}`,
         'content-type': 'application/json'
       },
       body: JSON.stringify({
         model: this.modelName,
-        input: text.trim()
+        input: [text.trim()]
       })
     })
 
     if (!response.ok) {
       const error = await response.text()
       throw new Error(
-        `Anthropic Embeddings API error ${response.status}: ${error}`
+        `Voyage Embeddings API error ${response.status}: ${error}`
       )
     }
 
     const data = await response.json() as {
-      embeddings: Array<{ embedding: number[] }>
+      data: Array<{ embedding: number[] }>
     }
 
-    const embedding = data.embeddings?.[0]?.embedding
+    const embedding = data.data?.[0]?.embedding
 
     if (!embedding || embedding.length === 0) {
-      throw new Error('Anthropic API returned empty embedding')
+      throw new Error('Voyage API returned empty embedding')
     }
 
     if (embedding.length !== this.dimension) {
