@@ -73,7 +73,7 @@ async function buildAdapters(): Promise<{
     })
 
     const embedder = new AnthropicEmbeddingAdapter({
-      apiKey: process.env.ANTHROPIC_API_KEY ?? ''
+      apiKey: process.env.VOYAGE_API_KEY ?? ''
     })
 
     const extractor = new AnthropicExtractionAdapter({
