@@ -171,6 +171,33 @@ export class FalkorDBAdapter implements StorageAdapter {
     return { reindexed: result.data?.length ?? 0 }
   }
 
+  async rebuildVectorIndex(workspace: string): Promise<{ updated: number }> {
+    const result = await this.graph!.query(
+      `MATCH (c:Cluster {workspace: $workspace})
+       WHERE c.confidence <> 'superseded'
+       RETURN c.id AS id, c.embedding AS embedding`,
+      { params: { workspace } }
+    )
+
+    let updated = 0
+    for (const row of (result.data ?? []) as any[]) {
+      const id = row.id as string
+      const embedding = row.embedding
+
+      if (!embedding || embedding.length === 0) continue
+
+      await this.graph!.query(
+        `MATCH (c:Cluster {id: $id})
+         SET c.embedding = vecf32($embedding)`,
+        { params: { id, embedding } }
+      )
+      updated++
+    }
+
+    console.error(`[FalkorDB] Rebuilt vector index for ${updated} clusters`)
+    return { updated }
+  }
+
   // ── Workspace ───────────────────────────────────────────────────────
 
   async createWorkspace(

@@ -632,6 +632,10 @@ export class InMemoryAdapter implements StorageAdapter {
     }
   }
 
+  async rebuildVectorIndex(_workspace: string): Promise<{ updated: number }> {
+    return { updated: 0 }
+  }
+
   // ── Private Helpers ──────────────────────────────────────────────────
 
   private updateStructuralWeights(newCluster: Cluster): void {

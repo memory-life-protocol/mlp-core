@@ -108,6 +108,8 @@ interface StorageAdapter {
     supersededBy: string
   ): Promise<void>
 
+  rebuildVectorIndex(workspace: string): Promise<{ updated: number }>
+
 }
 
 export type { StorageAdapter }
