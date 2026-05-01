@@ -62,7 +62,7 @@ export class AnthropicExtractionAdapter implements ExtractionAdapter {
       )
     }
     this.apiKey = config.apiKey
-    this.modelName = config.model ?? 'claude-3-5-haiku-20241022'
+    this.modelName = config.model ?? 'claude-haiku-4-5-20251001'
   }
 
   async extract(raw: string): Promise<ExtractionResult> {
