@@ -300,7 +300,7 @@ export class FalkorDBAdapter implements StorageAdapter {
     // Find seed via vector similarity scoped to workspace.
     // Returns flat scalar fields — embedding excluded (float32 not deserialisable).
     const seedResult = await this.graph!.query(
-      `CALL db.idx.vector.queryNodes('Cluster', 'embedding', 5, vecf32($embedding))
+      `CALL db.idx.vector.queryNodes('Cluster', 'embedding', 20, vecf32($embedding))
        YIELD node, score
        WHERE node.workspace = $workspace
        AND node.confidence <> 'superseded'
@@ -381,6 +381,46 @@ export class FalkorDBAdapter implements StorageAdapter {
         degree,
         activation_score: score
       })
+    }
+
+    // Fallback: graph has no connections yet — find semantically similar
+    // clusters directly via vector search, excluding the seed.
+    // Fires only when spread returned nothing; replaced by graph traversal as
+    // connections form through use.
+    if (activated.length === 0) {
+      const fallbackResult = await this.graph!.query(
+        `CALL db.idx.vector.queryNodes('Cluster', 'embedding', 10, vecf32($embedding))
+         YIELD node, score
+         WHERE node.workspace = $workspace
+         AND node.confidence <> 'superseded'
+         AND node.id <> $seedId
+         RETURN
+           ${CLUSTER_FIELDS_NODE},
+           score
+         ORDER BY score DESC`,
+        {
+          params: {
+            embedding: trigger.embedding,
+            workspace: trigger.workspace,
+            seedId: seed.id
+          }
+        }
+      )
+
+      for (const row of (fallbackResult.data ?? []) as any[]) {
+        const cluster = this.rowToCluster(row)
+        const similarity = parseFloat(String(row.score)) || 0
+        const weight = cluster.weight.combined
+        const activation_score = weight > 0 ? similarity * weight : similarity
+
+        activated.push({
+          cluster,
+          degree: 1,
+          activation_score
+        })
+      }
+
+      activated.sort((a, b) => b.activation_score - a.activation_score)
     }
 
     activated.sort((a, b) => b.activation_score - a.activation_score)
