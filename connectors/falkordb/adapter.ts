@@ -279,7 +279,7 @@ export class FalkorDBAdapter implements StorageAdapter {
 
     const seedRow = seedResult.data[0] as any
     const seed = this.rowToCluster(seedRow.node)
-    const seedSimilarity = seedRow.score as number
+    const seedSimilarity = parseFloat(String(seedRow.score)) || 0
 
     // Boost if in session context
     const inSession = trigger.session_context.includes(seed.id)
@@ -313,8 +313,8 @@ export class FalkorDBAdapter implements StorageAdapter {
 
     for (const row of (spreadResult.data ?? []) as any[]) {
       const cluster = this.rowToCluster(row.c)
-      const degree = row.degree as number
-      const pathStrength = row.path_strength as number
+      const degree = parseInt(String(row.degree)) || 1
+      const pathStrength = parseFloat(String(row.path_strength ?? 1)) || 1
 
       const score = boostedSimilarity
         * pathStrength
@@ -801,9 +801,9 @@ export class FalkorDBAdapter implements StorageAdapter {
       },
       connections: [],
       weight: {
-        structural: row.weight_structural as number ?? 0,
-        usage: row.weight_usage as number ?? 0,
-        combined: row.weight_combined as number ?? 0
+        structural: parseFloat(String(row.weight_structural ?? 0)) || 0,
+        usage: parseFloat(String(row.weight_usage ?? 0)) || 0,
+        combined: parseFloat(String(row.weight_combined ?? 0)) || 0
       },
       embedding: []
     }
