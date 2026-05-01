@@ -134,6 +134,8 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
   const httpServer = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://localhost:${port}`)
 
+    console.error(`[HTTP] ${req.method} ${url.pathname}`)
+
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Mcp-Session-Id')
