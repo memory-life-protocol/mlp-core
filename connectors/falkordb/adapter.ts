@@ -450,7 +450,6 @@ export class FalkorDBAdapter implements StorageAdapter {
          WHERE node.workspace = $workspace
          AND node.confidence <> 'superseded'
          AND node.id <> $seedId
-         AND score >= $threshold
          RETURN
            ${CLUSTER_FIELDS_NODE},
            score
@@ -459,10 +458,16 @@ export class FalkorDBAdapter implements StorageAdapter {
           params: {
             embedding: trigger.embedding,
             workspace: trigger.workspace,
-            seedId: seed.id,
-            threshold: 0.3
+            seedId: seed.id
           }
         }
+      )
+
+      console.error('[Activator] Fallback scores:',
+        (fallbackResult.data ?? []).slice(0, 5).map((r: any) => ({
+          id: r.id,
+          score: r.score
+        }))
       )
 
       for (const row of (fallbackResult.data ?? []) as any[]) {
