@@ -1,5 +1,7 @@
 export type ClusterConfidence = 'provisional' | 'verified' | 'superseded'
 
+export type ConstraintType = 'hard' | 'soft' | 'open'
+
 export type SourceType =
   'founder' |
   'conversation' |
@@ -70,6 +72,7 @@ export interface Cluster {
   what: string
   why: string
   confidence: ClusterConfidence
+  constraint_type: ConstraintType
   evidence: ClusterEvidence[]
   temporal: ClusterTemporal
   source: ClusterSource

@@ -34,8 +34,24 @@ import type {
   Signal,
   Cluster,
   ClusterConnection,
-  WatcherSignal
+  WatcherSignal,
+  ConstraintType
 } from '../interfaces/types.js'
+
+function inferConstraintType(raw: string): ConstraintType {
+  const hardSignals = [
+    'must', 'cannot', 'never', 'always', 'required', 'mandatory',
+    'compliance', 'legal', 'regulation', 'prohibited', 'enforce'
+  ]
+  const openSignals = [
+    'explore', 'consider', 'maybe', 'could', 'potential',
+    'undecided', 'open', 'investigate', 'option', 'possibility'
+  ]
+  const lower = raw.toLowerCase()
+  if (hardSignals.some(s => lower.includes(s))) return 'hard'
+  if (openSignals.some(s => lower.includes(s))) return 'open'
+  return 'soft'
+}
 
 export class Encoder {
 
@@ -81,6 +97,7 @@ export class Encoder {
       what: extracted.what,
       why: extracted.why ?? 'Not specified',
       confidence: 'provisional',
+      constraint_type: inferConstraintType(signal.raw),
       evidence: [
         {
           source_type: signal.source_type,

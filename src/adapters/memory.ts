@@ -96,6 +96,7 @@ export class InMemoryAdapter implements StorageAdapter {
         // Append to history — never overwrite
         const updatedCluster: Cluster = {
           ...cluster,
+          constraint_type: cluster.constraint_type ?? 'soft',
           temporal: {
             ...cluster.temporal,
             history: [
@@ -110,7 +111,10 @@ export class InMemoryAdapter implements StorageAdapter {
         }
         this.clusters.set(cluster.id, updatedCluster)
       } else {
-        this.clusters.set(cluster.id, { ...cluster })
+        this.clusters.set(cluster.id, {
+          ...cluster,
+          constraint_type: cluster.constraint_type ?? 'soft'
+        })
       }
 
       // Update structural weight of connected clusters

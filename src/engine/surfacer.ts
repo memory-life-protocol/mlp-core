@@ -328,34 +328,25 @@ export class Surfacer {
       ...result.activated.map(a => a.cluster)
     ]
 
-    // Hard constraints — verified clusters with governs connections
+    // Route clusters by constraint_type
     for (const cluster of allActivated) {
-      if (cluster.confidence === 'verified') {
-        const governsConnections = cluster.connections.filter(
-          conn => conn.type === 'governs'
-        )
-        if (governsConnections.length > 0) {
-          must_respect.push(cluster.what)
-        }
-      }
-    }
-
-    // Soft context — verified clusters without governs connections
-    for (const cluster of allActivated) {
-      if (
-        cluster.confidence === 'verified' &&
-        !must_respect.includes(cluster.what)
-      ) {
+      if (cluster.constraint_type === 'hard') {
+        must_respect.push(cluster.what)
+      } else if (cluster.constraint_type === 'open') {
+        open_space.push(cluster.what)
+      } else {
         should_consider.push(cluster.what)
       }
     }
 
-    // Structural surfaces become should_consider
+    // Structural surfaces routed by constraint_type
     for (const surface of structural) {
-      if (surface.cluster.confidence === 'verified') {
-        should_consider.push(
-          `${surface.cluster.what} — ${surface.reason}`
-        )
+      if (surface.cluster.constraint_type === 'hard') {
+        must_respect.push(`${surface.cluster.what} — ${surface.reason}`)
+      } else if (surface.cluster.constraint_type === 'open') {
+        open_space.push(`${surface.cluster.what} — ${surface.reason}`)
+      } else {
+        should_consider.push(`${surface.cluster.what} — ${surface.reason}`)
       }
     }
 
@@ -378,15 +369,6 @@ export class Surfacer {
       must_respect.push(
         `CONFLICT: "${conflict.cluster_a.what}" contradicts "${conflict.cluster_b.what}" — do not act until resolved`
       )
-    }
-
-    // Open space — provisional clusters
-    for (const cluster of allActivated) {
-      if (cluster.confidence === 'provisional') {
-        open_space.push(
-          `"${cluster.what}" is provisional — not yet corroborated by code or tests`
-        )
-      }
     }
 
     return { must_respect, should_consider, open_space, verify_before_building }
