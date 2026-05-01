@@ -42,7 +42,9 @@ Return exactly this structure:
   "workflow": "which workflow this relates to or null if not stated",
   "connections_implied": ["list of concepts explicitly referenced in the input"],
   "significance_hint": "high if critical/must/never/always language, low if minor, medium otherwise"
-}`
+}
+
+Return only raw JSON. No markdown. No code fences. No preamble. The first character of your response must be { and the last must be }.`
 
 interface AnthropicExtractionConfig {
   apiKey: string
@@ -104,7 +106,13 @@ export class AnthropicExtractionAdapter implements ExtractionAdapter {
 
     let parsed: any
     try {
-      parsed = JSON.parse(text)
+      const responseText = text.trim()
+      const cleaned = responseText
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim()
+      parsed = JSON.parse(cleaned)
     } catch {
       throw new Error(
         `Extraction returned invalid JSON: ${text.substring(0, 200)}`
