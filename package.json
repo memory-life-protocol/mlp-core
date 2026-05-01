@@ -7,8 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "start": "node dist/src/index.js",
-    "create-workspace": "tsx scripts/create-workspace.ts"
+    "start": "node dist/src/index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
