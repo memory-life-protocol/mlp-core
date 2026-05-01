@@ -114,13 +114,16 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       // Connect server to transport
       await server.connect(transport)
 
-      // Force correct Accept header before MCP SDK validates it
-      // This allows any HTTP client to connect without
-      // needing to set specific Accept headers
-      const originalHeaders = req.headers
-      req.headers = {
-        ...originalHeaders,
-        'accept': 'application/json, text/event-stream'
+      // Force Accept header before MCP SDK validates it.
+      // Hono (used internally by the SDK) reads rawHeaders, not req.headers,
+      // so we must patch rawHeaders directly.
+      const acceptIdx = req.rawHeaders.findIndex(
+        (h, i) => i % 2 === 0 && h.toLowerCase() === 'accept'
+      )
+      if (acceptIdx === -1) {
+        req.rawHeaders.push('accept', 'application/json, text/event-stream')
+      } else {
+        req.rawHeaders[acceptIdx + 1] = 'application/json, text/event-stream'
       }
 
       // Handle the request
