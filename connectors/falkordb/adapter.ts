@@ -445,11 +445,12 @@ export class FalkorDBAdapter implements StorageAdapter {
     // connections form through use.
     if (activated.length === 0) {
       const fallbackResult = await this.graph!.query(
-        `CALL db.idx.vector.queryNodes('Cluster', 'embedding', 10, vecf32($embedding))
+        `CALL db.idx.vector.queryNodes('Cluster', 'embedding', 15, vecf32($embedding))
          YIELD node, score
          WHERE node.workspace = $workspace
          AND node.confidence <> 'superseded'
          AND node.id <> $seedId
+         AND score >= $threshold
          RETURN
            ${CLUSTER_FIELDS_NODE},
            score
@@ -458,21 +459,23 @@ export class FalkorDBAdapter implements StorageAdapter {
           params: {
             embedding: trigger.embedding,
             workspace: trigger.workspace,
-            seedId: seed.id
+            seedId: seed.id,
+            threshold: 0.3
           }
         }
       )
 
       for (const row of (fallbackResult.data ?? []) as any[]) {
         const cluster = this.rowToCluster(row)
-        const similarity = parseFloat(String(row.score)) || 0
-        const weight = cluster.weight.combined
-        const activation_score = weight > 0 ? similarity * weight : similarity
+        const similarityScore = parseFloat(String(row.score)) || 0
+        const activationScore = cluster.weight.combined > 0
+          ? similarityScore * cluster.weight.combined
+          : similarityScore * 0.5
 
         activated.push({
           cluster,
           degree: 1,
-          activation_score
+          activation_score: activationScore
         })
       }
 
