@@ -129,7 +129,8 @@ async function startTransports(
   activator: Activator,
   surfacer: Surfacer,
   consolidator: Consolidator,
-  storage: StorageAdapter
+  storage: StorageAdapter,
+  embedder: EmbeddingAdapter
 ): Promise<void> {
   const transport = process.env.MLP_TRANSPORT ?? 'stdio'
   const port = parseInt(process.env.PORT ?? '8080')
@@ -142,6 +143,7 @@ async function startTransports(
       encoder,
       activator,
       surfacer,
+      embedder,
       version: '0.1.0',
       createMLPServer: (_workspaceId: string) => {
         return createMLPServer(
@@ -189,7 +191,7 @@ async function main(): Promise<void> {
   await startWatchers(watchers, encoder)
 
   // Start transports
-  await startTransports(encoder, activator, surfacer, consolidator, storage)
+  await startTransports(encoder, activator, surfacer, consolidator, storage, embedder)
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {

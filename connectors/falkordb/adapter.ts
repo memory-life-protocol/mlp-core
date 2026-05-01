@@ -172,30 +172,18 @@ export class FalkorDBAdapter implements StorageAdapter {
   }
 
   async rebuildVectorIndex(workspace: string): Promise<{ updated: number }> {
+    // Returns cluster ids and what text only — no embedding field.
+    // Actual re-embedding is driven by the /api/admin/reindex endpoint
+    // which has access to the embedder.
     const result = await this.graph!.query(
       `MATCH (c:Cluster {workspace: $workspace})
        WHERE c.confidence <> 'superseded'
-       RETURN c.id AS id, c.embedding AS embedding`,
+       RETURN c.id AS id, c.what AS what`,
       { params: { workspace } }
     )
 
-    let updated = 0
-    for (const row of (result.data ?? []) as any[]) {
-      const id = row.id as string
-      const embedding = row.embedding
-
-      if (!embedding || embedding.length === 0) continue
-
-      await this.graph!.query(
-        `MATCH (c:Cluster {id: $id})
-         SET c.embedding = vecf32($embedding)`,
-        { params: { id, embedding } }
-      )
-      updated++
-    }
-
-    console.error(`[FalkorDB] Rebuilt vector index for ${updated} clusters`)
-    return { updated }
+    console.error(`[FalkorDB] Found ${result.data?.length ?? 0} clusters to reindex`)
+    return { updated: result.data?.length ?? 0 }
   }
 
   // ── Workspace ───────────────────────────────────────────────────────

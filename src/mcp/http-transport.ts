@@ -40,6 +40,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { createServer, type IncomingMessage } from 'node:http'
 import { randomUUID, createHash } from 'node:crypto'
 import type { StorageAdapter } from '../interfaces/StorageAdapter.js'
+import type { EmbeddingAdapter } from '../interfaces/EmbeddingAdapter.js'
 import type { Encoder } from '../engine/encoder.js'
 import type { Activator } from '../engine/activator.js'
 import type { Surfacer } from '../engine/surfacer.js'
@@ -50,6 +51,7 @@ export interface HTTPTransportConfig {
   encoder: Encoder
   activator: Activator
   surfacer: Surfacer
+  embedder: EmbeddingAdapter
   createMLPServer: (workspaceId: string) => any
   version: string
 }
@@ -126,7 +128,7 @@ function patchAcceptHeader(req: any): void {
 }
 
 export function startHTTPTransport(config: HTTPTransportConfig): void {
-  const { port, storage, encoder, activator, surfacer, version } = config
+  const { port, storage, encoder, activator, surfacer, embedder, version } = config
 
   // Session map: sessionId → { transport, workspaceId }
   const sessions = new Map<string, Session>()
@@ -337,11 +339,34 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       }
 
       try {
-        const result = await (storage as any).rebuildVectorIndex(auth.workspaceId!)
+        const clusterResult = await (storage as any).graph.query(
+          `MATCH (c:Cluster {workspace: $workspace})
+           WHERE c.confidence <> 'superseded'
+           RETURN c.id AS id, c.what AS what`,
+          { params: { workspace: auth.workspaceId! } }
+        )
+
+        let updated = 0
+        for (const row of (clusterResult.data ?? []) as any[]) {
+          const id = row.id as string
+          const what = row.what as string
+          if (!what) continue
+
+          const embedding = await embedder.embed(what)
+
+          await (storage as any).graph.query(
+            `MATCH (c:Cluster {id: $id})
+             SET c.embedding = vecf32($embedding)`,
+            { params: { id, embedding } }
+          )
+          updated++
+        }
+
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ success: true, ...result }))
+        res.end(JSON.stringify({ success: true, updated }))
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+        console.error('[HTTP] /api/admin/reindex error:', message)
         res.writeHead(500, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: message }))
       }
