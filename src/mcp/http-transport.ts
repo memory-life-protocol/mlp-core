@@ -18,6 +18,12 @@
  *   GET  /mcp        — SSE stream endpoint
  *   GET  /health     — health check
  *
+ * Sessions:
+ *   The MCP protocol requires a multi-step handshake before tools
+ *   can be called. Sessions are keyed by Mcp-Session-Id header.
+ *   The first request (initialize) creates a session. Subsequent
+ *   requests reuse the same transport instance for that session.
+ *
  * What it does not do:
  *   It never bypasses workspace isolation.
  *   It never exposes clusters from other workspaces.
@@ -36,8 +42,30 @@ export interface HTTPTransportConfig {
   version: string
 }
 
+interface Session {
+  transport: StreamableHTTPServerTransport
+  workspaceId: string
+}
+
+function patchAcceptHeader(req: any): void {
+  // Hono (used internally by StreamableHTTPServerTransport) builds the Fetch
+  // Request from rawHeaders, not req.headers. Patch rawHeaders so clients
+  // that omit the required Accept value aren't rejected with 406.
+  const acceptIdx = req.rawHeaders.findIndex(
+    (h: string, i: number) => i % 2 === 0 && h.toLowerCase() === 'accept'
+  )
+  if (acceptIdx === -1) {
+    req.rawHeaders.push('accept', 'application/json, text/event-stream')
+  } else {
+    req.rawHeaders[acceptIdx + 1] = 'application/json, text/event-stream'
+  }
+}
+
 export function startHTTPTransport(config: HTTPTransportConfig): void {
   const { port, storage, version } = config
+
+  // Session map: sessionId → { transport, workspaceId }
+  const sessions = new Map<string, Session>()
 
   const httpServer = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://localhost:${port}`)
@@ -69,7 +97,17 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
     // MCP endpoint
     if (url.pathname === '/mcp') {
 
-      // Validate auth
+      patchAcceptHeader(req)
+
+      // Check for existing session
+      const sessionId = req.headers['mcp-session-id'] as string | undefined
+      if (sessionId && sessions.has(sessionId)) {
+        const session = sessions.get(sessionId)!
+        await session.transport.handleRequest(req, res)
+        return
+      }
+
+      // New session — validate auth before creating anything
       const authHeader = req.headers['authorization']
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.writeHead(401, { 'Content-Type': 'application/json' })
@@ -102,31 +140,28 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
         return
       }
 
-      // Create MCP server and transport for this request
-      const server = config.createMLPServer(workspaceId)
+      // Create transport and server for this session
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (sessionId) => {
-          console.error(`[HTTP Transport] Session initialized: ${sessionId}`)
+        onsessioninitialized: (sid) => {
+          sessions.set(sid, { transport, workspaceId })
+          console.error(`[HTTP Transport] Session initialized: ${sid} (workspace: ${workspaceId})`)
         }
       })
 
-      // Connect server to transport
-      await server.connect(transport)
-
-      // Force Accept header before MCP SDK validates it.
-      // Hono (used internally by the SDK) reads rawHeaders, not req.headers,
-      // so we must patch rawHeaders directly.
-      const acceptIdx = req.rawHeaders.findIndex(
-        (h, i) => i % 2 === 0 && h.toLowerCase() === 'accept'
-      )
-      if (acceptIdx === -1) {
-        req.rawHeaders.push('accept', 'application/json, text/event-stream')
-      } else {
-        req.rawHeaders[acceptIdx + 1] = 'application/json, text/event-stream'
+      transport.onclose = () => {
+        // Clean up session on disconnect
+        for (const [sid, session] of sessions) {
+          if (session.transport === transport) {
+            sessions.delete(sid)
+            console.error(`[HTTP Transport] Session closed: ${sid}`)
+            break
+          }
+        }
       }
 
-      // Handle the request
+      const server = config.createMLPServer(workspaceId)
+      await server.connect(transport)
       await transport.handleRequest(req, res)
 
       return
