@@ -298,6 +298,36 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       return
     }
 
+    if (url.pathname === '/api/debug/scores' && req.method === 'POST') {
+      const auth = await validateRequest(req, storage)
+      if (!auth.valid) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: auth.error }))
+        return
+      }
+
+      let body: any
+      try {
+        body = await readBody(req)
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Invalid JSON' }))
+        return
+      }
+
+      try {
+        const stats = await storage.getWorkspaceStats(auth.workspaceId!)
+        const domains = await storage.listDomains(auth.workspaceId!)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ stats, domains }))
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: message }))
+      }
+      return
+    }
+
     if (url.pathname === '/api/consolidate' && req.method === 'POST') {
       const auth = await validateRequest(req, storage)
       if (!auth.valid) {

@@ -159,6 +159,18 @@ export class FalkorDBAdapter implements StorageAdapter {
     }
   }
 
+  async reindexAllClusters(workspace: string): Promise<{ reindexed: number }> {
+    const result = await this.graph!.query(
+      `MATCH (c:Cluster {workspace: $workspace})
+       WHERE c.confidence <> 'superseded'
+       RETURN c.id AS id`,
+      { params: { workspace } }
+    )
+
+    console.error(`[FalkorDB] Reindexing ${result.data?.length ?? 0} clusters`)
+    return { reindexed: result.data?.length ?? 0 }
+  }
+
   // ── Workspace ───────────────────────────────────────────────────────
 
   async createWorkspace(
