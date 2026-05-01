@@ -114,6 +114,10 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       // Connect server to transport
       await server.connect(transport)
 
+      // StreamableHTTPServerTransport requires both content types in Accept.
+      // Normalize here so clients that omit one still work.
+      req.headers['accept'] = 'application/json, text/event-stream'
+
       // Handle the request
       await transport.handleRequest(req, res)
 
