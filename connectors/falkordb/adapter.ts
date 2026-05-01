@@ -292,6 +292,62 @@ export class FalkorDBAdapter implements StorageAdapter {
     }
   }
 
+  async findSimilarClusters(
+    embedding: number[],
+    workspace: string,
+    threshold: number = 0.92,
+    excludeId?: string
+  ): Promise<Array<{ cluster: Cluster; similarity: number }>> {
+    const result = await this.graph!.query(
+      `CALL db.idx.vector.queryNodes('Cluster', 'embedding', 10, vecf32($embedding))
+       YIELD node, score
+       WHERE node.workspace = $workspace
+       AND node.confidence <> 'superseded'
+       ${excludeId ? 'AND node.id <> $excludeId' : ''}
+       AND score >= $threshold
+       RETURN
+         ${CLUSTER_FIELDS_NODE},
+         score
+       ORDER BY score DESC`,
+      {
+        params: {
+          embedding,
+          workspace,
+          threshold,
+          ...(excludeId ? { excludeId } : {})
+        }
+      }
+    )
+
+    return (result.data ?? []).map((row: any) => ({
+      cluster: this.rowToCluster(row),
+      similarity: parseFloat(String(row.score)) || 0
+    }))
+  }
+
+  async supersedeClusters(
+    clusterIds: string[],
+    workspace: string,
+    supersededBy: string
+  ): Promise<void> {
+    for (const id of clusterIds) {
+      await this.graph!.query(
+        `MATCH (c:Cluster {id: $id, workspace: $workspace})
+         SET c.confidence = 'superseded',
+             c.updated_at = $now,
+             c.superseded_by = $supersededBy`,
+        {
+          params: {
+            id,
+            workspace,
+            now: new Date().toISOString(),
+            supersededBy
+          }
+        }
+      )
+    }
+  }
+
   async activateCluster(
     trigger: Trigger,
     depth: number

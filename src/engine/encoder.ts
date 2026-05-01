@@ -35,7 +35,8 @@ import type {
   Cluster,
   ClusterConnection,
   WatcherSignal,
-  ConstraintType
+  ConstraintType,
+  EncodeResult
 } from '../interfaces/types.js'
 
 function inferConstraintType(raw: string): ConstraintType {
@@ -63,7 +64,7 @@ export class Encoder {
 
   async encode(
     signal: Signal
-  ): Promise<{ success: boolean; id: string; error?: string }> {
+  ): Promise<EncodeResult> {
 
     // STEP 1 — Validate
     if (!signal.raw || signal.raw.trim().length === 0) {
@@ -165,7 +166,24 @@ export class Encoder {
       }
     }
 
-    // STEP 6 — Store
+    // STEP 6 — Duplicate check
+    const similar = await this.storageAdapter.findSimilarClusters(
+      cluster.embedding,
+      signal.workspace,
+      0.92
+    )
+
+    if (similar.length > 0) {
+      return {
+        success: true,
+        id: similar[0].cluster.id,
+        duplicate: true,
+        similar_to: similar[0].cluster.id,
+        similarity: similar[0].similarity
+      }
+    }
+
+    // STEP 7 — Store
     return await this.storageAdapter.encodeCluster(cluster)
   }
 

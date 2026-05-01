@@ -195,7 +195,14 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
           timestamp: new Date().toISOString()
         })
         res.writeHead(result.success ? 200 : 500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify(result))
+        res.end(JSON.stringify({
+          success: result.success,
+          id: result.id,
+          duplicate: result.duplicate ?? false,
+          similar_to: result.similar_to ?? null,
+          similarity: result.similarity ?? null,
+          error: result.error
+        }))
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error('[HTTP] /api/encode error:', message)
@@ -283,6 +290,39 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
         const stats = await storage.getWorkspaceStats(auth.workspaceId!)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(stats))
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: message }))
+      }
+      return
+    }
+
+    if (url.pathname === '/api/consolidate' && req.method === 'POST') {
+      const auth = await validateRequest(req, storage)
+      if (!auth.valid) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: auth.error }))
+        return
+      }
+
+      let body: any
+      try {
+        body = await readBody(req)
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Invalid JSON' }))
+        return
+      }
+
+      try {
+        await storage.supersedeClusters(
+          body.supersede_ids,
+          auth.workspaceId!,
+          body.keep_id
+        )
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: true, superseded: body.supersede_ids.length }))
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         res.writeHead(500, { 'Content-Type': 'application/json' })

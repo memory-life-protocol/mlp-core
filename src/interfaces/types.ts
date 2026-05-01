@@ -173,6 +173,15 @@ export interface StrengthenResult {
   previous_strength: number
 }
 
+export interface EncodeResult {
+  success: boolean
+  id: string
+  error?: string
+  duplicate?: boolean
+  similar_to?: string
+  similarity?: number
+}
+
 export interface TraversePath {
   cluster: Cluster
   path: string[]

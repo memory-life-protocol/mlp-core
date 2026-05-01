@@ -95,6 +95,19 @@ interface StorageAdapter {
     last_encode: string | null
   }>
 
+  findSimilarClusters(
+    embedding: number[],
+    workspace: string,
+    threshold?: number,
+    excludeId?: string
+  ): Promise<Array<{ cluster: Cluster; similarity: number }>>
+
+  supersedeClusters(
+    clusterIds: string[],
+    workspace: string,
+    supersededBy: string
+  ): Promise<void>
+
 }
 
 export type { StorageAdapter }

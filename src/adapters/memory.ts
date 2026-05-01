@@ -610,6 +610,28 @@ export class InMemoryAdapter implements StorageAdapter {
     }
   }
 
+  async findSimilarClusters(
+    _embedding: number[],
+    _workspace: string,
+    _threshold = 0.92,
+    _excludeId?: string
+  ): Promise<Array<{ cluster: Cluster; similarity: number }>> {
+    return []
+  }
+
+  async supersedeClusters(
+    clusterIds: string[],
+    workspace: string,
+    _supersededBy: string
+  ): Promise<void> {
+    for (const id of clusterIds) {
+      const cluster = this.clusters.get(id)
+      if (cluster && cluster.domain.workspace === workspace) {
+        cluster.confidence = 'superseded'
+      }
+    }
+  }
+
   // ── Private Helpers ──────────────────────────────────────────────────
 
   private updateStructuralWeights(newCluster: Cluster): void {
