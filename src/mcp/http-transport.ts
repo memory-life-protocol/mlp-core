@@ -198,6 +198,7 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
         res.end(JSON.stringify(result))
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+        console.error('[HTTP] /api/encode error:', message)
         res.writeHead(500, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ success: false, id: '', error: message }))
       }
@@ -243,6 +244,7 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
         res.end(JSON.stringify(fullResult))
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+        console.error('[HTTP] /api/activate error:', message)
         res.writeHead(500, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: message }))
       }
