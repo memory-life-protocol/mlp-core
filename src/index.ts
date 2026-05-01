@@ -68,7 +68,8 @@ async function buildAdapters(): Promise<{
 
     const storage = new FalkorDBAdapter({
       host: process.env.FALKORDB_HOST ?? 'localhost',
-      port: parseInt(process.env.FALKORDB_PORT ?? '6379')
+      port: parseInt(process.env.FALKORDB_PORT ?? '6379'),
+      password: process.env.FALKORDB_PASSWORD
     })
 
     const embedder = new AnthropicEmbeddingAdapter({

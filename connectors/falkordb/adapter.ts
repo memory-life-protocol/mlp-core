@@ -50,6 +50,7 @@ import type {
 interface FalkorDBConfig {
   host: string
   port: number
+  password?: string
 }
 
 export class FalkorDBAdapter implements StorageAdapter {
@@ -65,12 +66,18 @@ export class FalkorDBAdapter implements StorageAdapter {
   // ── Lifecycle ───────────────────────────────────────────────────────
 
   async connect(): Promise<void> {
-    this.client = createClient({
+    const clientConfig: any = {
       socket: {
         host: this.config.host,
         port: this.config.port
       }
-    })
+    }
+
+    if (this.config.password) {
+      clientConfig.password = this.config.password
+    }
+
+    this.client = createClient(clientConfig)
     await this.client.connect()
 
     this.graph = new Graph(this.client as any, 'mlp')
