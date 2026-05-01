@@ -140,7 +140,7 @@ async function startTransports(
       port,
       storage,
       version: '0.1.0',
-      createServer: (_workspaceId: string) => {
+      createMLPServer: (_workspaceId: string) => {
         return createMLPServer(
           encoder,
           activator,
