@@ -443,6 +443,50 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       return
     }
 
+    if (url.pathname === '/api/debug/spread' && req.method === 'POST') {
+      const auth = await validateRequest(req, storage)
+      if (!auth.valid) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: auth.error }))
+        return
+      }
+
+      let body: any
+      try { body = await readBody(req) } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Invalid JSON' }))
+        return
+      }
+
+      try {
+        const result = await (storage as any).graph.query(
+          `MATCH path = (seed:Cluster {id: $seedId})-[r:CONNECTS*1..3]->(c:Cluster)
+           WHERE c.workspace = $workspace
+           AND c.confidence <> 'superseded'
+           WITH c,
+             reduce(s = 1.0, rel IN relationships(path) | s * rel.strength) AS path_strength,
+             length(path) AS degree
+           RETURN c.id AS id, c.what AS what, path_strength, degree
+           ORDER BY path_strength DESC
+           LIMIT 20`,
+          { params: { seedId: body.cluster_id, workspace: auth.workspaceId! } }
+        )
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({
+          cluster_id: body.cluster_id,
+          spread_results: result.data,
+          count: result.data?.length ?? 0
+        }))
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('[debug/spread]', message)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: message }))
+      }
+      return
+    }
+
     if (url.pathname === '/api/debug/edges' && req.method === 'POST') {
       const auth = await validateRequest(req, storage)
       if (!auth.valid) {
