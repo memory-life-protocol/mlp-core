@@ -443,6 +443,52 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       return
     }
 
+    if (url.pathname === '/api/debug/edges' && req.method === 'POST') {
+      const auth = await validateRequest(req, storage)
+      if (!auth.valid) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: auth.error }))
+        return
+      }
+
+      let body: any
+      try { body = await readBody(req) } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Invalid JSON' }))
+        return
+      }
+
+      try {
+        const result = await (storage as any).graph.query(
+          `MATCH (c:Cluster {id: $id})-[r:CONNECTS]->(target:Cluster)
+           RETURN target.id AS target_id, r.type AS type, r.strength AS strength
+           LIMIT 20`,
+          { params: { id: body.cluster_id } }
+        )
+
+        const incoming = await (storage as any).graph.query(
+          `MATCH (source:Cluster)-[r:CONNECTS]->(c:Cluster {id: $id})
+           RETURN source.id AS source_id, r.type AS type, r.strength AS strength
+           LIMIT 20`,
+          { params: { id: body.cluster_id } }
+        )
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({
+          cluster_id: body.cluster_id,
+          outgoing: result.data,
+          incoming: incoming.data,
+          outgoing_count: result.data?.length ?? 0,
+          incoming_count: incoming.data?.length ?? 0
+        }))
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: message }))
+      }
+      return
+    }
+
     // ── MCP Transport ───────────────────────────────────────────────
 
     if (url.pathname === '/mcp') {
