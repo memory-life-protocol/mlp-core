@@ -428,35 +428,12 @@ export class FalkorDBAdapter implements StorageAdapter {
        WITH c,
          reduce(s = 1.0, rel IN relationships(path) | s * rel.strength) AS path_strength,
          length(path) AS degree
-       WITH c.id AS cluster_id,
-         max(path_strength) AS best_strength,
-         min(degree) AS shortest_degree,
-         collect(c)[0] AS cluster
        RETURN
-         cluster.id AS id,
-         cluster.created_at AS created_at,
-         cluster.updated_at AS updated_at,
-         cluster.what AS what,
-         cluster.why AS why,
-         cluster.confidence AS confidence,
-         cluster.constraint_type AS constraint_type,
-         cluster.workspace AS workspace,
-         cluster.module AS module,
-         cluster.workflow AS workflow,
-         cluster.tags AS tags,
-         cluster.source_type AS source_type,
-         cluster.source_tool AS source_tool,
-         cluster.encoded_by AS encoded_by,
-         cluster.valid_from AS valid_from,
-         cluster.weight_structural AS weight_structural,
-         cluster.weight_usage AS weight_usage,
-         cluster.weight_combined AS weight_combined,
-         cluster.evidence AS evidence,
-         cluster.history AS history,
-         best_strength AS path_strength,
-         shortest_degree AS degree
-       ORDER BY best_strength DESC
-       LIMIT 20`,
+         ${CLUSTER_FIELDS_C},
+         path_strength,
+         degree
+       ORDER BY path_strength DESC
+       LIMIT 50`,
       {
         params: {
           seedId: seed.id,
@@ -465,7 +442,7 @@ export class FalkorDBAdapter implements StorageAdapter {
       }
     )
 
-    const activated: ActivatedEntry[] = []
+    const seenSpread = new Map<string, ActivatedEntry>()
 
     for (const row of (spreadResult.data ?? []) as any[]) {
       const cluster = this.rowToCluster(row)
@@ -479,14 +456,14 @@ export class FalkorDBAdapter implements StorageAdapter {
 
       if (score < 0.01) continue
 
-      activated.push({
-        cluster,
-        degree,
-        activation_score: score
-      })
+      const existing = seenSpread.get(cluster.id)
+      if (!existing || score > existing.activation_score) {
+        seenSpread.set(cluster.id, { cluster, degree, activation_score: score })
+      }
     }
 
-    activated.sort((a, b) => b.activation_score - a.activation_score)
+    const activated = Array.from(seenSpread.values())
+      .sort((a, b) => b.activation_score - a.activation_score)
 
     return {
       seed,
