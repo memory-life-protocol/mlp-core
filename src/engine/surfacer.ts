@@ -331,10 +331,15 @@ export class Surfacer {
       return false
     }
 
+    const seenIds = new Set<string>()
     const allActivated = [
       result.seed,
       ...result.activated.map(a => a.cluster)
-    ].filter(Boolean)
+    ].filter(Boolean).filter(cluster => {
+      if (seenIds.has(cluster.id)) return false
+      seenIds.add(cluster.id)
+      return true
+    })
 
     // Route by confidence + constraint_type
     for (const cluster of allActivated) {
@@ -460,8 +465,17 @@ export class Surfacer {
       })
     }
 
-    // Sort by relevance score descending
-    return picture.sort((a, b) => b.relevance_score - a.relevance_score)
+    // Deduplicate by cluster id — keep highest relevance_score
+    const seen = new Map<string, typeof picture[0]>()
+    for (const entry of picture) {
+      const existing = seen.get(entry.cluster.id)
+      if (!existing || entry.relevance_score > existing.relevance_score) {
+        seen.set(entry.cluster.id, entry)
+      }
+    }
+    const deduplicated = Array.from(seen.values())
+      .sort((a, b) => b.relevance_score - a.relevance_score)
+    return deduplicated
   }
 
   // ── Helpers ───────────────────────────────────────────────────────
