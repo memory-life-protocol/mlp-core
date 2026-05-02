@@ -406,6 +406,50 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       return
     }
 
+    if (url.pathname === '/api/admin/connect-domain' && req.method === 'POST') {
+      const auth = await validateRequest(req, storage)
+      if (!auth.valid) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: auth.error }))
+        return
+      }
+
+      try {
+        const allClusters = await storage.getHighWeightClusters(auth.workspaceId!, 100)
+        let connections = 0
+
+        for (const cluster of allClusters) {
+          const related = allClusters.filter(c => {
+            if (c.id === cluster.id) return false
+            const sameModule = cluster.domain.module && c.domain.module &&
+              cluster.domain.module.toLowerCase() === c.domain.module.toLowerCase()
+            const sameWorkflow = cluster.domain.workflow && c.domain.workflow &&
+              cluster.domain.workflow.toLowerCase() === c.domain.workflow.toLowerCase()
+            return sameModule || sameWorkflow
+          })
+
+          if (related.length > 0) {
+            const connectionType = cluster.constraint_type === 'hard' ? 'governs' : 'references'
+            await storage.connectClusters(
+              cluster.id,
+              related.map(c => c.id),
+              auth.workspaceId!,
+              connectionType
+            )
+            connections += related.length
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: true, clusters: allClusters.length, connections }))
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: message }))
+      }
+      return
+    }
+
     // ── MCP Transport ───────────────────────────────────────────────
 
     if (url.pathname === '/mcp') {

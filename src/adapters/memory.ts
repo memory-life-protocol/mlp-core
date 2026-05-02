@@ -636,6 +636,15 @@ export class InMemoryAdapter implements StorageAdapter {
     return { updated: 0 }
   }
 
+  async connectClusters(
+    _fromId: string,
+    _toIds: string[],
+    _workspace: string,
+    _connectionType: 'governs' | 'references'
+  ): Promise<void> {
+    // memory adapter — connections handled inline
+  }
+
   // ── Private Helpers ──────────────────────────────────────────────────
 
   private updateStructuralWeights(newCluster: Cluster): void {

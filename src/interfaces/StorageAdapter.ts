@@ -110,6 +110,13 @@ interface StorageAdapter {
 
   rebuildVectorIndex(workspace: string): Promise<{ updated: number }>
 
+  connectClusters(
+    fromId: string,
+    toIds: string[],
+    workspace: string,
+    connectionType: 'governs' | 'references'
+  ): Promise<void>
+
 }
 
 export type { StorageAdapter }

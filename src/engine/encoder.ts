@@ -166,6 +166,44 @@ export class Encoder {
       }
     }
 
+    // STEP 5b — Connect to existing clusters in same domain
+    // This enables graph traversal to surface related knowledge
+    // without relying solely on vector similarity
+    try {
+      const domainClusters = await this.storageAdapter.getHighWeightClusters(
+        signal.workspace,
+        20
+      )
+
+      for (const existing of domainClusters) {
+        if (existing.id === cluster.id) continue
+
+        const sameModule = cluster.domain.module &&
+          existing.domain.module &&
+          cluster.domain.module.toLowerCase() === existing.domain.module.toLowerCase()
+
+        const sameWorkflow = cluster.domain.workflow &&
+          existing.domain.workflow &&
+          cluster.domain.workflow.toLowerCase() === existing.domain.workflow.toLowerCase()
+
+        if (sameModule || sameWorkflow) {
+          const connection: ClusterConnection = {
+            target_cluster_id: existing.id,
+            type: existing.constraint_type === 'hard' ? 'governs' : 'references',
+            strength: 0.5,
+            direction: 'bidirectional',
+            context: `same domain: ${cluster.domain.module ?? cluster.domain.workflow}`,
+            established_at: now,
+            last_activated: now,
+            activation_count: 1
+          }
+          cluster.connections.push(connection)
+        }
+      }
+    } catch {
+      // Domain connection failed — not fatal
+    }
+
     // STEP 6 — Duplicate check / Corroboration
     const similar = await this.storageAdapter.findSimilarClusters(
       cluster.embedding,

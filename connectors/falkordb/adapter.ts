@@ -922,6 +922,38 @@ export class FalkorDBAdapter implements StorageAdapter {
     }
   }
 
+  async connectClusters(
+    fromId: string,
+    toIds: string[],
+    workspace: string,
+    connectionType: 'governs' | 'references'
+  ): Promise<void> {
+    const now = new Date().toISOString()
+    for (const toId of toIds) {
+      await this.graph!.query(
+        `MATCH (a:Cluster {id: $fromId, workspace: $workspace}),
+               (b:Cluster {id: $toId, workspace: $workspace})
+         MERGE (a)-[r:CONNECTS {type: $type}]->(b)
+         ON CREATE SET
+           r.strength = 0.5,
+           r.direction = 'bidirectional',
+           r.activation_count = 1,
+           r.established_at = $now,
+           r.last_activated = $now,
+           r.context = 'domain connection'
+         MERGE (b)-[r2:CONNECTS {type: $type}]->(a)
+         ON CREATE SET
+           r2.strength = 0.5,
+           r2.direction = 'bidirectional',
+           r2.activation_count = 1,
+           r2.established_at = $now,
+           r2.last_activated = $now,
+           r2.context = 'domain connection'`,
+        { params: { fromId, toId, workspace, type: connectionType, now } }
+      )
+    }
+  }
+
   // ── Private Helpers ──────────────────────────────────────────────────
 
   private async storeConnectionEdge(
