@@ -166,7 +166,7 @@ export class Encoder {
       }
     }
 
-    // STEP 6 — Duplicate check
+    // STEP 6 — Duplicate check / Corroboration
     const similar = await this.storageAdapter.findSimilarClusters(
       cluster.embedding,
       signal.workspace,
@@ -174,11 +174,29 @@ export class Encoder {
     )
 
     if (similar.length > 0) {
+      const existing = similar[0].cluster
+
+      // This is corroboration not a duplicate.
+      // A second signal about the same knowledge strengthens it.
+      await this.storageAdapter.processWatcherSignal({
+        watcher_id: 'encoder',
+        watcher_type: 'manual',
+        workspace: signal.workspace,
+        raw: signal.raw,
+        source_type: signal.source_type,
+        source_tool: signal.source_tool,
+        encoded_by: signal.encoded_by,
+        timestamp: now,
+        corroborates_cluster_id: existing.id,
+        contradicts_cluster_id: null
+      })
+
       return {
         success: true,
-        id: similar[0].cluster.id,
-        duplicate: true,
-        similar_to: similar[0].cluster.id,
+        id: existing.id,
+        duplicate: false,
+        corroborated: true,
+        similar_to: existing.id,
         similarity: similar[0].similarity
       }
     }

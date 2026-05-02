@@ -323,30 +323,56 @@ export class Surfacer {
       return { must_respect, should_consider, open_space, verify_before_building }
     }
 
+    // Treat as verified if: confidence === 'verified' OR encoded by founder
+    function shouldTreatAsVerified(cluster: Cluster): boolean {
+      if (cluster.confidence === 'verified') return true
+      if (cluster.source.encoded_by.toLowerCase() === 'founder') return true
+      if (cluster.source.type === 'founder') return true
+      return false
+    }
+
     const allActivated = [
       result.seed,
       ...result.activated.map(a => a.cluster)
-    ]
+    ].filter(Boolean)
 
-    // Route clusters by constraint_type
+    // Route by confidence + constraint_type
     for (const cluster of allActivated) {
-      if (cluster.constraint_type === 'hard') {
-        must_respect.push(cluster.what)
-      } else if (cluster.constraint_type === 'open') {
-        open_space.push(cluster.what)
+      if (shouldTreatAsVerified(cluster)) {
+        if (cluster.constraint_type === 'hard') {
+          if (!must_respect.includes(cluster.what)) {
+            must_respect.push(cluster.what)
+          }
+        } else if (cluster.constraint_type === 'open') {
+          if (!open_space.includes(cluster.what)) {
+            open_space.push(cluster.what)
+          }
+        } else {
+          if (!should_consider.includes(cluster.what)) {
+            should_consider.push(cluster.what)
+          }
+        }
       } else {
-        should_consider.push(cluster.what)
+        // Provisional non-founder clusters go to open_space
+        if (!open_space.includes(cluster.what)) {
+          open_space.push(cluster.what)
+        }
       }
     }
 
-    // Structural surfaces routed by constraint_type
+    // Structural surfaces routed by confidence + constraint_type
     for (const surface of structural) {
-      if (surface.cluster.constraint_type === 'hard') {
-        must_respect.push(`${surface.cluster.what} — ${surface.reason}`)
-      } else if (surface.cluster.constraint_type === 'open') {
-        open_space.push(`${surface.cluster.what} — ${surface.reason}`)
+      const cluster = surface.cluster
+      if (shouldTreatAsVerified(cluster)) {
+        if (cluster.constraint_type === 'hard') {
+          must_respect.push(`${cluster.what} — ${surface.reason}`)
+        } else if (cluster.constraint_type === 'open') {
+          open_space.push(`${cluster.what} — ${surface.reason}`)
+        } else {
+          should_consider.push(`${cluster.what} — ${surface.reason}`)
+        }
       } else {
-        should_consider.push(`${surface.cluster.what} — ${surface.reason}`)
+        open_space.push(`${cluster.what} — ${surface.reason}`)
       }
     }
 

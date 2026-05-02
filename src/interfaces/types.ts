@@ -178,6 +178,7 @@ export interface EncodeResult {
   id: string
   error?: string
   duplicate?: boolean
+  corroborated?: boolean
   similar_to?: string
   similarity?: number
 }
