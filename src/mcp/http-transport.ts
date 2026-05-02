@@ -419,14 +419,7 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
         let connections = 0
 
         for (const cluster of allClusters) {
-          const related = allClusters.filter(c => {
-            if (c.id === cluster.id) return false
-            const sameModule = cluster.domain.module && c.domain.module &&
-              cluster.domain.module.toLowerCase() === c.domain.module.toLowerCase()
-            const sameWorkflow = cluster.domain.workflow && c.domain.workflow &&
-              cluster.domain.workflow.toLowerCase() === c.domain.workflow.toLowerCase()
-            return sameModule || sameWorkflow
-          })
+          const related = allClusters.filter(c => c.id !== cluster.id)
 
           if (related.length > 0) {
             const connectionType = cluster.constraint_type === 'hard' ? 'governs' : 'references'
