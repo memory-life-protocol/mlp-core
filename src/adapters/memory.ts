@@ -113,7 +113,8 @@ export class InMemoryAdapter implements StorageAdapter {
       } else {
         this.clusters.set(cluster.id, {
           ...cluster,
-          constraint_type: cluster.constraint_type ?? 'soft'
+          constraint_type: cluster.constraint_type ?? 'soft',
+          embedding_version: cluster.embedding_version ?? 'stub'
         })
       }
 

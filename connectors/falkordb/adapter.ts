@@ -321,7 +321,8 @@ export class FalkorDBAdapter implements StorageAdapter {
            c.evidence = $evidence,
            c.history = $history,
            c.embedding = vecf32($embedding),
-           c.embedding_b64 = $embedding_b64
+           c.embedding_b64 = $embedding_b64,
+           c.embedding_version = $embedding_version
          ON MATCH SET
            c.updated_at = $updated_at,
            c.what = $what,
@@ -333,7 +334,8 @@ export class FalkorDBAdapter implements StorageAdapter {
            c.weight_combined = $weight_combined,
            c.evidence = $evidence,
            c.history = $history,
-           c.embedding_b64 = $embedding_b64`,
+           c.embedding_b64 = $embedding_b64,
+           c.embedding_version = $embedding_version`,
         {
           params: {
             id: cluster.id,
@@ -357,7 +359,8 @@ export class FalkorDBAdapter implements StorageAdapter {
             evidence: JSON.stringify(cluster.evidence),
             history: JSON.stringify(cluster.temporal.history),
             embedding: cluster.embedding,
-            embedding_b64: Buffer.from(new Float32Array(cluster.embedding).buffer).toString('base64')
+            embedding_b64: Buffer.from(new Float32Array(cluster.embedding).buffer).toString('base64'),
+            embedding_version: cluster.embedding_version ?? 'unknown'
           }
         }
       )
@@ -1083,7 +1086,8 @@ export class FalkorDBAdapter implements StorageAdapter {
         usage: parseFloat(String(row.weight_usage ?? 0)) || 0,
         combined: parseFloat(String(row.weight_combined ?? 0)) || 0
       },
-      embedding: []
+      embedding: [],
+      embedding_version: (row.embedding_version as string) ?? 'unknown'
     }
   }
 

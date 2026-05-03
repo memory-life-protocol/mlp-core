@@ -130,7 +130,8 @@ export class Encoder {
         usage: 0,
         combined: 0
       },
-      embedding
+      embedding,
+      embedding_version: this.embeddingAdapter.modelName ?? 'unknown'
     }
 
     // STEP 5 — Resolve implied connections

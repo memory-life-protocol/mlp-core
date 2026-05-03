@@ -80,6 +80,7 @@ export interface Cluster {
   connections: ClusterConnection[]
   weight: ClusterWeight
   embedding: number[]
+  embedding_version: string
 }
 
 export interface Signal {
