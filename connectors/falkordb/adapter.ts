@@ -104,9 +104,11 @@ export class FalkorDBAdapter implements StorageAdapter {
   private client: ReturnType<typeof createClient> | null = null
   private graph: Graph | null = null
   private config: FalkorDBConfig
+  private embedder: any = null
 
-  constructor(config: FalkorDBConfig) {
+  constructor(config: FalkorDBConfig, embedder?: any) {
     this.config = config
+    this.embedder = embedder ?? null
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────
@@ -403,27 +405,17 @@ export class FalkorDBAdapter implements StorageAdapter {
     depth: number
   ): Promise<ActivationResult> {
 
-    // Find seed via vector similarity scoped to workspace.
-    // Returns flat scalar fields — embedding excluded (float32 not deserialisable).
-    const seedResult = await this.graph!.query(
-      `CALL db.idx.vector.queryNodes('Cluster', 'embedding', 20, vecf32($embedding))
-       YIELD node, score
-       WHERE node.workspace = $workspace
-       AND node.confidence <> 'superseded'
-       RETURN
-         ${CLUSTER_FIELDS_NODE},
-         score
-       ORDER BY score DESC
-       LIMIT 1`,
-      {
-        params: {
-          embedding: trigger.embedding,
-          workspace: trigger.workspace
-        }
-      }
+    // Seed finding — compute similarity in application code.
+    // FalkorDB vector index is unreliable on some deployments;
+    // we fetch what text and re-embed via Voyage to find the closest match.
+    const allClustersResult = await this.graph!.query(
+      `MATCH (c:Cluster {workspace: $workspace})
+       WHERE c.confidence <> 'superseded'
+       RETURN c.id AS id, c.what AS what, c.weight_combined AS weight_combined`,
+      { params: { workspace: trigger.workspace } }
     )
 
-    if (!seedResult.data || seedResult.data.length === 0) {
+    if (!allClustersResult.data || allClustersResult.data.length === 0) {
       return {
         seed: null as any,
         activated: [],
@@ -432,9 +424,58 @@ export class FalkorDBAdapter implements StorageAdapter {
       }
     }
 
-    const seedRow = seedResult.data[0] as any
-    const seed = this.rowToCluster(seedRow)
-    const seedSimilarity = parseFloat(String(seedRow.score)) || 0
+    function cosineSim(a: number[], b: number[]): number {
+      let dot = 0, normA = 0, normB = 0
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i]
+        normA += a[i] * a[i]
+        normB += b[i] * b[i]
+      }
+      return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1)
+    }
+
+    let bestId = ''
+    let bestScore = -1
+
+    for (const row of allClustersResult.data as any[]) {
+      try {
+        const clusterEmbedding = await this.embedder!.embed(row.what as string)
+        const sim = cosineSim(trigger.embedding, clusterEmbedding)
+        if (sim > bestScore) {
+          bestScore = sim
+          bestId = row.id as string
+        }
+      } catch {
+        continue
+      }
+    }
+
+    if (!bestId) {
+      return {
+        seed: null as any,
+        activated: [],
+        total_activated: 0,
+        depth_reached: 0
+      }
+    }
+
+    const seedFetchResult = await this.graph!.query(
+      `MATCH (c:Cluster {id: $id, workspace: $workspace})
+       RETURN ${CLUSTER_FIELDS_C}`,
+      { params: { id: bestId, workspace: trigger.workspace } }
+    )
+
+    if (!seedFetchResult.data || seedFetchResult.data.length === 0) {
+      return {
+        seed: null as any,
+        activated: [],
+        total_activated: 0,
+        depth_reached: 0
+      }
+    }
+
+    const seed = this.rowToCluster(seedFetchResult.data[0] as any)
+    const seedSimilarity = bestScore
 
     // Boost if in session context
     const inSession = trigger.session_context.includes(seed.id)

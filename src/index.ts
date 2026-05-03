@@ -66,12 +66,6 @@ async function buildAdapters(): Promise<{
     const { AnthropicEmbeddingAdapter } = await import(anthropicEmbedderPath)
     const { AnthropicExtractionAdapter } = await import(anthropicExtractorPath)
 
-    const storage = new FalkorDBAdapter({
-      host: process.env.FALKORDB_HOST ?? 'localhost',
-      port: parseInt(process.env.FALKORDB_PORT ?? '6379'),
-      password: process.env.FALKORDB_PASSWORD
-    })
-
     const embedder = new AnthropicEmbeddingAdapter({
       apiKey: process.env.VOYAGE_API_KEY ?? ''
     })
@@ -79,6 +73,12 @@ async function buildAdapters(): Promise<{
     const extractor = new AnthropicExtractionAdapter({
       apiKey: process.env.ANTHROPIC_API_KEY ?? ''
     })
+
+    const storage = new FalkorDBAdapter({
+      host: process.env.FALKORDB_HOST ?? 'localhost',
+      port: parseInt(process.env.FALKORDB_PORT ?? '6379'),
+      password: process.env.FALKORDB_PASSWORD
+    }, embedder)
 
     return { storage, embedder, extractor }
   }
