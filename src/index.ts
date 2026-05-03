@@ -124,6 +124,68 @@ function startHealthCheck(port: number): void {
   })
 }
 
+async function reindexVectorEmbeddings(
+  storage: StorageAdapter,
+  embedder: EmbeddingAdapter
+): Promise<void> {
+  if (!IS_PRODUCTION) return
+
+  console.error('[MLP] Reindexing vector embeddings on startup...')
+
+  try {
+    const storageInternal = storage as any
+
+    const wsResult = await storageInternal.graph.query(
+      `MATCH (c:Cluster)
+       RETURN DISTINCT c.workspace AS workspace_id`
+    )
+
+    const workspaces = (wsResult.data ?? []) as any[]
+    if (workspaces.length === 0) {
+      console.error('[MLP] No workspaces found — skipping reindex')
+      return
+    }
+
+    let totalUpdated = 0
+
+    for (const row of workspaces) {
+      const workspaceId = row.workspace_id as string
+
+      const clusters = await storageInternal.graph.query(
+        `MATCH (c:Cluster {workspace: $workspace})
+         WHERE c.confidence <> 'superseded'
+         RETURN c.id AS id, c.what AS what`,
+        { params: { workspace: workspaceId } }
+      )
+
+      const clusterList = (clusters.data ?? []) as any[]
+      let updated = 0
+
+      for (const cluster of clusterList) {
+        try {
+          const embedding = await embedder.embed(cluster.what as string)
+          await storageInternal.graph.query(
+            `MATCH (c:Cluster {id: $id})
+             SET c.embedding = vecf32($embedding)`,
+            { params: { id: cluster.id as string, embedding } }
+          )
+          updated++
+        } catch {
+          // Skip — don't block startup on a single cluster failure
+        }
+      }
+
+      totalUpdated += updated
+      console.error(`[MLP] Workspace ${workspaceId}: reindexed ${updated} clusters`)
+    }
+
+    console.error(`[MLP] Reindex complete — ${totalUpdated} clusters total`)
+  } catch (err) {
+    // Non-fatal — server starts regardless
+    console.error('[MLP] Reindex warning:', err instanceof Error ? err.message : String(err))
+  }
+}
+
 async function startTransports(
   encoder: Encoder,
   activator: Activator,
@@ -184,6 +246,9 @@ async function main(): Promise<void> {
 
   // Start background consolidation
   consolidator.start()
+
+  // Reindex vector embeddings on startup — restores index after container restart
+  await reindexVectorEmbeddings(storage, embedder)
 
   // Start watchers — empty by default
   // Connector packages register watchers here
