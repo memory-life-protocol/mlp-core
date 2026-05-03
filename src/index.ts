@@ -181,6 +181,9 @@ async function reindexVectorEmbeddings(
     }
 
     console.error(`[MLP] Reindex complete — ${totalUpdated} clusters total`)
+    // Give FalkorDB time to build the vector index after embedding writes
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    console.error('[MLP] Vector index ready')
   } catch (err) {
     console.error('[MLP] Reindex error (non-fatal):', err)
   }
