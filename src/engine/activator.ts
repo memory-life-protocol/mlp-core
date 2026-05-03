@@ -91,27 +91,21 @@ export class Activator {
       resolvedDepth
     )
 
-    // Hebbian strengthening — fire and forget, never blocks response
-    // Every pair that co-activated gets their connection strengthened
+    // Record co-activation for background Hebbian strengthening
+    // The Consolidator processes these every 60 seconds — never blocks response
     if (result.seed && result.activated.length > 0) {
       const allIds = [
         result.seed.id,
         ...result.activated.map(a => a.cluster.id)
       ]
-
-      const pairs: Array<[string, string]> = []
-      for (let i = 0; i < allIds.length; i++) {
-        for (let j = i + 1; j < allIds.length; j++) {
-          pairs.push([allIds[i], allIds[j]])
+      // Fire and forget — just record, don't strengthen inline
+      setImmediate(() => {
+        try {
+          this.storageAdapter.recordCoActivation?.(allIds, workspace)
+        } catch {
+          // Non-fatal — consolidator will catch it next cycle
         }
-      }
-
-      Promise.allSettled(
-        pairs.map(([idA, idB]) =>
-          this.storageAdapter.strengthenPath(idA, idB, workspace)
-        )
-      )
-      // Intentionally not awaited — Hebbian strengthening is background work
+      })
     }
 
     return result

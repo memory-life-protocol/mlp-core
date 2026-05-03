@@ -117,6 +117,8 @@ interface StorageAdapter {
     connectionType: 'governs' | 'references'
   ): Promise<void>
 
+  recordCoActivation?(clusterIds: string[], workspace: string): void
+
 }
 
 export type { StorageAdapter }
