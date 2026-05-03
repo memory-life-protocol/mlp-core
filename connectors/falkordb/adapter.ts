@@ -105,6 +105,7 @@ export class FalkorDBAdapter implements StorageAdapter {
   private graph: Graph | null = null
   private config: FalkorDBConfig
   private embedder: any = null
+  private embeddingCache: Map<string, number[]> = new Map()
 
   constructor(config: FalkorDBConfig, embedder?: any) {
     this.config = config
@@ -337,6 +338,9 @@ export class FalkorDBAdapter implements StorageAdapter {
         await this.storeConnectionEdge(cluster.id, conn)
       }
 
+      // Invalidate cache so next activation picks up the new cluster
+      this.embeddingCache.clear()
+
       return { success: true, id: cluster.id }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -439,11 +443,19 @@ export class FalkorDBAdapter implements StorageAdapter {
 
     for (const row of allClustersResult.data as any[]) {
       try {
-        const clusterEmbedding = await this.embedder!.embed(row.what as string)
+        const clusterId = row.id as string
+        const what = row.what as string
+
+        const cached = this.embeddingCache.get(clusterId)
+        const clusterEmbedding: number[] = cached ?? await this.embedder!.embed(what)
+        if (!cached) {
+          this.embeddingCache.set(clusterId, clusterEmbedding)
+        }
+
         const sim = cosineSim(trigger.embedding, clusterEmbedding)
         if (sim > bestScore) {
           bestScore = sim
-          bestId = row.id as string
+          bestId = clusterId
         }
       } catch {
         continue
