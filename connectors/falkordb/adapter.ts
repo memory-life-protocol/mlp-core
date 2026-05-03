@@ -510,11 +510,15 @@ export class FalkorDBAdapter implements StorageAdapter {
       }
     }
 
+    console.error(`[FalkorDB] Seed found: ${bestId} in ${Date.now() - t0}ms`)
+
+    const t1 = Date.now()
     const seedFetchResult = await this.graph!.query(
       `MATCH (c:Cluster {id: $id, workspace: $workspace})
        RETURN ${CLUSTER_FIELDS_C}`,
       { params: { id: bestId, workspace: trigger.workspace } }
     )
+    console.error(`[FalkorDB] Seed fetch: ${Date.now() - t1}ms`)
 
     if (!seedFetchResult.data || seedFetchResult.data.length === 0) {
       return {
@@ -536,6 +540,7 @@ export class FalkorDBAdapter implements StorageAdapter {
 
     // Spread activation via graph traversal.
     // Returns flat scalar fields — embedding excluded.
+    const t2 = Date.now()
     const spreadResult = await this.graph!.query(
       `MATCH path = (seed:Cluster {id: $seedId})-[r:CONNECTS*1..${depth}]->(c:Cluster)
        WHERE c.workspace = $workspace
@@ -556,7 +561,9 @@ export class FalkorDBAdapter implements StorageAdapter {
         }
       }
     )
+    console.error(`[FalkorDB] Spread query: ${Date.now() - t2}ms, rows: ${spreadResult.data?.length ?? 0}`)
 
+    const t3 = Date.now()
     const seenSpread = new Map<string, ActivatedEntry>()
 
     for (const row of (spreadResult.data ?? []) as any[]) {
@@ -576,6 +583,7 @@ export class FalkorDBAdapter implements StorageAdapter {
         seenSpread.set(cluster.id, { cluster, degree, activation_score: score })
       }
     }
+    console.error(`[FalkorDB] Processing: ${Date.now() - t3}ms`)
 
     const activated = Array.from(seenSpread.values())
       .sort((a, b) => b.activation_score - a.activation_score)
