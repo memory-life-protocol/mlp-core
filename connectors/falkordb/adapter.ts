@@ -143,6 +143,32 @@ export class FalkorDBAdapter implements StorageAdapter {
     }
   }
 
+  async warmEmbeddingCache(): Promise<number> {
+    const result = await this.graph!.query(
+      `MATCH (c:Cluster)
+       WHERE c.confidence <> 'superseded'
+       AND c.embedding_b64 IS NOT NULL
+       RETURN c.id AS id, c.embedding_b64 AS embedding_b64`
+    )
+
+    let count = 0
+    for (const row of (result.data ?? []) as any[]) {
+      try {
+        const id = row.id as string
+        const b64 = row.embedding_b64 as string
+        const buffer = Buffer.from(b64, 'base64')
+        const floats = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
+        this.embeddingCache.set(id, Array.from(floats))
+        count++
+      } catch {
+        continue
+      }
+    }
+
+    console.error(`[FalkorDB] Embedding cache warmed — ${count} clusters`)
+    return count
+  }
+
   private async ensureSchema(): Promise<void> {
     const queries = [
       `CREATE INDEX FOR (c:Cluster) ON (c.id)`,
@@ -294,7 +320,8 @@ export class FalkorDBAdapter implements StorageAdapter {
            c.weight_combined = $weight_combined,
            c.evidence = $evidence,
            c.history = $history,
-           c.embedding = vecf32($embedding)
+           c.embedding = vecf32($embedding),
+           c.embedding_b64 = $embedding_b64
          ON MATCH SET
            c.updated_at = $updated_at,
            c.what = $what,
@@ -305,7 +332,8 @@ export class FalkorDBAdapter implements StorageAdapter {
            c.weight_usage = $weight_usage,
            c.weight_combined = $weight_combined,
            c.evidence = $evidence,
-           c.history = $history`,
+           c.history = $history,
+           c.embedding_b64 = $embedding_b64`,
         {
           params: {
             id: cluster.id,
@@ -328,7 +356,8 @@ export class FalkorDBAdapter implements StorageAdapter {
             weight_combined: cluster.weight.combined,
             evidence: JSON.stringify(cluster.evidence),
             history: JSON.stringify(cluster.temporal.history),
-            embedding: cluster.embedding
+            embedding: cluster.embedding,
+            embedding_b64: Buffer.from(new Float32Array(cluster.embedding).buffer).toString('base64')
           }
         }
       )
@@ -338,8 +367,10 @@ export class FalkorDBAdapter implements StorageAdapter {
         await this.storeConnectionEdge(cluster.id, conn)
       }
 
-      // Invalidate cache so next activation picks up the new cluster
-      this.embeddingCache.clear()
+      // Add new cluster to cache directly — no need to clear everything
+      if (cluster.embedding && cluster.embedding.length > 0) {
+        this.embeddingCache.set(cluster.id, cluster.embedding)
+      }
 
       return { success: true, id: cluster.id }
     } catch (err) {

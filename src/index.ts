@@ -124,78 +124,6 @@ function startHealthCheck(port: number): void {
   })
 }
 
-async function reindexVectorEmbeddings(
-  storage: StorageAdapter,
-  embedder: EmbeddingAdapter
-): Promise<void> {
-  if (!IS_PRODUCTION) return
-
-  console.error('[MLP] Reindexing vector embeddings on startup...')
-
-  try {
-    const storageInternal = storage as any
-
-    const wsResult = await storageInternal.graph.query(
-      `MATCH (c:Cluster)
-       RETURN DISTINCT c.workspace AS workspace_id`
-    )
-
-    const workspaces = (wsResult.data ?? []) as any[]
-    console.error('[MLP] Reindex found workspaces:', JSON.stringify(wsResult.data))
-    if (workspaces.length === 0) {
-      console.error('[MLP] No workspaces found — skipping reindex')
-      return
-    }
-
-    let totalUpdated = 0
-
-    for (const row of workspaces) {
-      const workspaceId = row.workspace_id as string
-
-      const clusters = await storageInternal.graph.query(
-        `MATCH (c:Cluster {workspace: $workspace})
-         WHERE c.confidence <> 'superseded'
-         RETURN c.id AS id, c.what AS what`,
-        { params: { workspace: workspaceId } }
-      )
-
-      const clusterList = (clusters.data ?? []) as any[]
-      let updated = 0
-
-      for (const cluster of clusterList) {
-        try {
-          const embedding = await embedder.embed(cluster.what as string)
-          await storageInternal.graph.query(
-            `MATCH (c:Cluster {id: $id})
-             SET c.embedding = vecf32($embedding)`,
-            { params: { id: cluster.id as string, embedding } }
-          )
-          updated++
-        } catch {
-          // Skip — don't block startup on a single cluster failure
-        }
-      }
-
-      totalUpdated += updated
-      console.error(`[MLP] Workspace ${workspaceId}: reindexed ${updated} clusters`)
-    }
-
-    console.error(`[MLP] Reindex complete — ${totalUpdated} clusters total`)
-
-    // Drop and recreate vector index to force FalkorDB to pick up new embeddings
-    try {
-      await (storage as any).rebuildVectorIndexFully()
-    } catch (err) {
-      console.error('[MLP] Index rebuild warning:', err instanceof Error ? err.message : String(err))
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 5000))
-    console.error('[MLP] Vector index ready')
-  } catch (err) {
-    console.error('[MLP] Reindex error (non-fatal):', err)
-  }
-}
-
 async function startTransports(
   encoder: Encoder,
   activator: Activator,
@@ -257,6 +185,17 @@ async function main(): Promise<void> {
   // Start background consolidation
   consolidator.start()
 
+  // Warm embedding cache from persisted base64 embeddings
+  // Fast — reads from FalkorDB, no API calls needed
+  if (IS_PRODUCTION) {
+    try {
+      const count = await (storage as any).warmEmbeddingCache()
+      console.error(`[MLP] Ready — ${count} clusters in memory`)
+    } catch (err) {
+      console.error('[MLP] Cache warm warning:', err instanceof Error ? err.message : String(err))
+    }
+  }
+
   // Start watchers — empty by default
   // Connector packages register watchers here
   const watchers: WatcherAdapter[] = []
@@ -264,11 +203,6 @@ async function main(): Promise<void> {
 
   // Start transports
   await startTransports(encoder, activator, surfacer, consolidator, storage, embedder)
-
-  // Reindex after server is fully started and FalkorDB connection is warm
-  // Small delay ensures the HTTP server is accepting before reindex fires
-  await new Promise(resolve => setTimeout(resolve, 2000))
-  await reindexVectorEmbeddings(storage, embedder)
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
