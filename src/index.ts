@@ -141,6 +141,7 @@ async function reindexVectorEmbeddings(
     )
 
     const workspaces = (wsResult.data ?? []) as any[]
+    console.error('[MLP] Reindex found workspaces:', JSON.stringify(wsResult.data))
     if (workspaces.length === 0) {
       console.error('[MLP] No workspaces found — skipping reindex')
       return
@@ -181,8 +182,7 @@ async function reindexVectorEmbeddings(
 
     console.error(`[MLP] Reindex complete — ${totalUpdated} clusters total`)
   } catch (err) {
-    // Non-fatal — server starts regardless
-    console.error('[MLP] Reindex warning:', err instanceof Error ? err.message : String(err))
+    console.error('[MLP] Reindex error (non-fatal):', err)
   }
 }
 
