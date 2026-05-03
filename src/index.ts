@@ -182,7 +182,7 @@ async function reindexVectorEmbeddings(
 
     console.error(`[MLP] Reindex complete — ${totalUpdated} clusters total`)
     // Give FalkorDB time to build the vector index after embedding writes
-    await new Promise(resolve => setTimeout(resolve, 3000))
+    await new Promise(resolve => setTimeout(resolve, 5000))
     console.error('[MLP] Vector index ready')
   } catch (err) {
     console.error('[MLP] Reindex error (non-fatal):', err)
@@ -250,9 +250,6 @@ async function main(): Promise<void> {
   // Start background consolidation
   consolidator.start()
 
-  // Reindex vector embeddings on startup — restores index after container restart
-  await reindexVectorEmbeddings(storage, embedder)
-
   // Start watchers — empty by default
   // Connector packages register watchers here
   const watchers: WatcherAdapter[] = []
@@ -260,6 +257,11 @@ async function main(): Promise<void> {
 
   // Start transports
   await startTransports(encoder, activator, surfacer, consolidator, storage, embedder)
+
+  // Reindex after server is fully started and FalkorDB connection is warm
+  // Small delay ensures the HTTP server is accepting before reindex fires
+  await new Promise(resolve => setTimeout(resolve, 2000))
+  await reindexVectorEmbeddings(storage, embedder)
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
