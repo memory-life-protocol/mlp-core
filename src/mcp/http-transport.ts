@@ -443,6 +443,55 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       return
     }
 
+    if (url.pathname === '/api/admin/backfill-embeddings' && req.method === 'POST') {
+      const auth = await validateRequest(req, storage)
+      if (!auth.valid) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: auth.error }))
+        return
+      }
+
+      try {
+        const result = await (storage as any).graph.query(
+          `MATCH (c:Cluster)
+           WHERE c.confidence <> 'superseded'
+           RETURN c.id AS id, c.what AS what`
+        )
+
+        let updated = 0
+        for (const row of (result.data ?? []) as any[]) {
+          const id = row.id as string
+          const what = row.what as string
+          try {
+            const embedding = await embedder.embed(what)
+            const b64 = Buffer.from(
+              new Float32Array(embedding).buffer
+            ).toString('base64')
+
+            await (storage as any).graph.query(
+              `MATCH (c:Cluster {id: $id})
+               SET c.embedding_b64 = $b64,
+                   c.embedding = vecf32($embedding)`,
+              { params: { id, b64, embedding } }
+            )
+
+            ;(storage as any).embeddingCache.set(id, embedding)
+            updated++
+          } catch {
+            continue
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: true, updated }))
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: message }))
+      }
+      return
+    }
+
     if (url.pathname === '/api/debug/spread' && req.method === 'POST') {
       const auth = await validateRequest(req, storage)
       if (!auth.valid) {
