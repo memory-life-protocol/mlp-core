@@ -238,17 +238,25 @@ export function startHTTPTransport(config: HTTPTransportConfig): void {
       }
 
       try {
+        const t0 = Date.now()
+
         const activationResult = await activator.activate(
           body.query,
           auth.workspaceId!,
           [],
           body.depth
         )
+        console.error(`[HTTP] activate: ${Date.now() - t0}ms`)
+
+        const t1 = Date.now()
         const fullResult = await surfacer.surface(
           activationResult,
           auth.workspaceId!,
           body.query
         )
+        console.error(`[HTTP] surface: ${Date.now() - t1}ms`)
+
+        console.error(`[HTTP] total: ${Date.now() - t0}ms`)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(fullResult))
       } catch (err) {
