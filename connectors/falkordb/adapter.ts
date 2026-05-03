@@ -159,6 +159,29 @@ export class FalkorDBAdapter implements StorageAdapter {
     }
   }
 
+  async rebuildVectorIndexFully(): Promise<void> {
+    // Drop and recreate the vector index to force FalkorDB to rebuild it
+    // This is needed after bulk embedding writes during startup reindex
+    try {
+      await this.graph!.query(
+        `DROP INDEX ON :Cluster(embedding)`
+      )
+      console.error('[FalkorDB] Vector index dropped')
+    } catch {
+      // Index may not exist yet — safe to ignore
+    }
+
+    try {
+      await this.graph!.query(
+        `CREATE VECTOR INDEX FOR (c:Cluster) ON (c.embedding)
+         OPTIONS {dimension: 1024, similarityFunction: 'cosine'}`
+      )
+      console.error('[FalkorDB] Vector index recreated')
+    } catch {
+      // Index may already exist — safe to ignore
+    }
+  }
+
   async reindexAllClusters(workspace: string): Promise<{ reindexed: number }> {
     const result = await this.graph!.query(
       `MATCH (c:Cluster {workspace: $workspace})
