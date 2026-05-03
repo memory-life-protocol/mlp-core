@@ -474,6 +474,8 @@ export class FalkorDBAdapter implements StorageAdapter {
 
     let bestId = ''
     let bestScore = -1
+    const t0 = Date.now()
+    let voyageCalls = 0
 
     for (const row of allClustersResult.data as any[]) {
       try {
@@ -484,6 +486,7 @@ export class FalkorDBAdapter implements StorageAdapter {
         const clusterEmbedding: number[] = cached ?? await this.embedder!.embed(what)
         if (!cached) {
           this.embeddingCache.set(clusterId, clusterEmbedding)
+          voyageCalls++
         }
 
         const sim = cosineSim(trigger.embedding, clusterEmbedding)
@@ -495,6 +498,8 @@ export class FalkorDBAdapter implements StorageAdapter {
         continue
       }
     }
+
+    console.error(`[Activator] Seed finding: ${Date.now() - t0}ms, Voyage calls: ${voyageCalls}, cache size: ${this.embeddingCache.size}`)
 
     if (!bestId) {
       return {

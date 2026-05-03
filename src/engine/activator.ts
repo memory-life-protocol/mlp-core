@@ -64,7 +64,9 @@ export class Activator {
     if (cached && cached.expires_at > now) {
       embedding = cached.embedding
     } else {
+      const t0 = Date.now()
       embedding = await this.embeddingAdapter.embed(query)
+      console.error(`[Activator] Query embed: ${Date.now() - t0}ms`)
       this.queryCache.set(cacheKey, { embedding, expires_at: now + this.QUERY_TTL_MS })
 
       // Evict expired entries periodically — keep cache clean
